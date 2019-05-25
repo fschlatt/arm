@@ -17,7 +17,7 @@ from arm.policy import Arm
 ARM_ITERS = 3000
 CURRICULUM = ()
 EPOCHS = 60
-FUTURE = True
+FUTURE = False
 FRAME_BUFFER = 4
 GAMMA = 0.99
 GPU = True
@@ -163,7 +163,7 @@ def train_arm():
         'cuda') if torch.cuda.is_available() else torch.device('cpu')
 
     network = Network(FRAME_BUFFER, env.action_space.n,
-                      LEARN_RATE, torch.device('cuda'))
+                      LEARN_RATE, future=FUTURE, device=device)
 
     arm = Arm(network, ARM_ITERS, MINI_BATCH_SIZE, TAU, future=FUTURE)
     policy = Policy(network, future=FUTURE)
