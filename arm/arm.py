@@ -8,7 +8,7 @@ import tensorflow as tf
 class Arm(torch.nn.Module):
 
     def __init__(self, network, iters, mini_batch_size, tau, future=False):
-        super(Network, self).__init__()
+        super(Arm, self).__init__()
 
         self.network = network
         self.target_network = copy.deepcopy(network)
