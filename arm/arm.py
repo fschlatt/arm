@@ -94,7 +94,6 @@ class Arm(torch.nn.Module):
         mb_obs = torch.from_numpy(mb_obs).to(self.device)
         mb_actions = torch.from_numpy(mb_actions).to(
             self.device).unsqueeze(1)
-        mb_pred_obs, mb_next_obs = None, None
 
         if self.future:
             mb_v, mb_q = torch.split(self.network(
@@ -102,6 +101,7 @@ class Arm(torch.nn.Module):
             mb_next_obs = torch.from_numpy(mb_next_obs).to(self.device)
             mb_pred_obs = self.network(mb_obs, mb_actions, future=True)
         else:
+            mb_pred_obs, mb_next_obs = None, None
             mb_v, mb_q = torch.split(self.network(
                 mb_obs), (1, self.network.action_dim), dim=1)
         mb_q = torch.gather(mb_q, dim=1, index=mb_actions)
@@ -113,7 +113,7 @@ class Arm(torch.nn.Module):
 
         self.steps += len(replay_buffer)
 
-        print('Preprocess trajectories...')
+        print('preprocessing trajectories...')
         v_tar, q_tar = self.vectorize_trajectories(replay_buffer)
 
         cum_v_loss = torch.tensor(0.0)
@@ -122,7 +122,7 @@ class Arm(torch.nn.Module):
 
         self.reset_v_tar()
 
-        print('Training network...')
+        print('training network...')
 
         for batch in range(self.iters):
 
@@ -153,9 +153,9 @@ class Arm(torch.nn.Module):
                 mean_q_loss = (cum_q_loss/int(self.iters / 10)).numpy()
                 mean_obs_loss = (cum_obs_loss/int(self.iters / 10)).numpy()
                 if self.future:
-                    print('Batch: {}, v_loss: {}, q_loss: {}, obs_loss: {}'.format(
+                    print('batch: {}, v_loss: {}, q_loss: {}, obs_loss: {}'.format(
                         batch + 1, mean_v_loss, mean_q_loss, mean_obs_loss))
-                print('Batch: {}, v_loss: {}, q_loss: {}'.format(
+                print('batch: {}, v_loss: {}, q_loss: {}'.format(
                         batch + 1, mean_v_loss, mean_q_loss))
                 cum_v_loss.zero_()
                 cum_q_loss.zero_()
