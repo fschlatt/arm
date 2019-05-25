@@ -111,7 +111,7 @@ class Network(torch.nn.Module):
         return out
 
 
-def main():
+def train_arm():
     env = gym.make('PongNoFrameskip-v4')
 
     writer = None
@@ -140,4 +140,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    train_arm()
