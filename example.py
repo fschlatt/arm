@@ -168,7 +168,7 @@ def train_arm():
     arm = Arm(network, ARM_ITERS, MINI_BATCH_SIZE, TAU, future=FUTURE)
     policy = Policy(network, future=FUTURE)
 
-    for epoch in range(EPOCHS):
+    while arm.epochs < EPOCHS:
 
         replay_buffer = collect_rep_buffer(env, policy)
 
