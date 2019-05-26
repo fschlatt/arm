@@ -7,6 +7,7 @@ import torch
 
 try:
     import tensorflow as tf
+    TENSORFLOW = True
 except ImportError:
     TENSORFLOW = False
 
