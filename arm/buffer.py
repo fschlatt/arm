@@ -1,12 +1,29 @@
-import pickle
-import time
-
+"""Replay buffer used to record environment state and agent behavior
+"""
 import numpy as np
 
 
 class ReplayBuffer():
+    """Replay buffer used to record observations, next observations, actions,
+    rewards and if a node is terminal. Can be passed to the
+    arm algorithm for training.
 
-    def __init__(self, curriculum=(), frame_buffer=1, n_step_size=1, gamma=0.9):
+    Keyword Arguments:
+        curriculum {tuple} -- range of indices to train on (default: {()})
+        curriculum_mode {str} -- either 'done' or 'reward', curriculum
+                                 learning based on episodes or rewards
+                                 (default: {'done'})
+        frame_buffer {int} -- number of frames per observation (default: {1})
+        n_step_size {int} -- number of steps to accumulate rewards (default: {1})
+        gamma {float} -- discount factor per reward step (default: {0.9})
+    """
+
+    def __init__(self,
+                 curriculum=(),
+                 curriculum_mode='done',
+                 frame_buffer=1,
+                 n_step_size=1,
+                 gamma=0.9):
         self.obs = []
         self.vec_obs = np.array([])
         self.next_obs = []
@@ -23,17 +40,16 @@ class ReplayBuffer():
 
         self.idcs = np.array([])
         self.obs_idcs = np.array([])
-        self.bounded_idcs = np.array([])
+        self.curriculum_idcs = np.array([])
 
         self.curriculum = curriculum
+        self.curriculum_mode = curriculum_mode
         self.frame_buffer = frame_buffer
         self.n_step_size = n_step_size
         self.gamma = gamma
 
     def __getitem__(self, idcs):
-        
         obs_idcs = self.obs_idcs[idcs]
-
         return (self.vec_obs[obs_idcs],
                 self.vec_next_obs[idcs],
                 self.vec_actions[idcs],
@@ -92,11 +108,14 @@ class ReplayBuffer():
         self.__compute_curriculum(mode)
 
     def __n_step_reward(self):
+        # split trajactories
         rewards = self.vec_rewards
         idcs = np.nonzero(self.vec_done)[0] + 1
         traj_rewards = np.split(rewards, idcs)[:-1]
+        # compute n step discount array
         n_step_discount = np.power(
             np.full(self.n_step_size, self.gamma), np.arange(self.n_step_size))
+        # compute n step rewards
         n_step = np.array([np.sum(trajectory[step_idx:step_idx+self.n_step_size] *
                                   n_step_discount[:trajectory.shape[0]-step_idx])
                            for trajectory in traj_rewards for step_idx in range(trajectory.shape[0])])
@@ -150,12 +169,16 @@ class ReplayBuffer():
 
         return self
 
-    def iterate(self, batch_size, random=False, curriculum=False):
+    def iterate(self, batch_size=0, random=False, curriculum=False):
+        """Generator to iterate over replay buffer
 
+        Keyword Arguments:
+            batch_size {int} -- number of samples per batch (default: {0})
+            random {bool} -- return random samples (default: {False})
+            curriculum {bool} -- only use samples from curriculum (default: {False})
+        """
         batch_iters = 0
-
         shown_data = 0
-
         if curriculum:
             iter_idcs = self.curriculum_idcs
         else:
@@ -163,23 +186,35 @@ class ReplayBuffer():
 
         while shown_data < iter_idcs.shape[0]:
             batch_iters += 1
-
             if random:
                 idcs = np.random.choice(iter_idcs.shape[0], batch_size)
             else:
                 end_idx = min(shown_data + batch_size, iter_idcs.shape[0])
                 idcs = np.arange(shown_data, end_idx)
                 idcs = iter_idcs[idcs]
-
             shown_data = batch_iters * batch_size
-
             yield self[idcs]
 
-    def vectorize(self, frame_buffer=0,
+    def vectorize(self,
                   curriculum=(),
+                  curriculum_mode='done',
+                  frame_buffer=0,
                   n_step_size=0,
-                  gamma=0,
-                  curriculum_mode='done'):
+                  gamma=0):
+        """Vectorizes buffer for training
+
+        Keyword Arguments:
+            curriculum {tuple} -- range of indices to train on (default: {()})
+            curriculum_mode {str} -- either 'done' or 'reward', curriculum
+                                     learning based on episodes or rewards
+                                     (default: {'done'})
+            frame_buffer {int} -- number of frames per observation (default: {1})
+            n_step_size {int} -- number of steps to accumulate rewards (default: {1})
+            gamma {float} -- discount factor per reward step (default: {0.9})
+
+        Returns:
+            ReplayBuffer -- vectorized buffer (no copy)
+        """
         self.__vectorize()
         idcs = False or len(self) != self.idcs.shape[0]
         if frame_buffer and frame_buffer != self.frame_buffer:
@@ -187,6 +222,9 @@ class ReplayBuffer():
             idcs = True
         if curriculum and curriculum != self.curriculum:
             self.curriculum = curriculum
+            idcs = True
+        if curriculum_mode and curriculum_mode != self.curriculum_mode:
+            self.curriculum_mode = curriculum_mode
             idcs = True
         if idcs:
             self.__vec_idcs(curriculum_mode)
