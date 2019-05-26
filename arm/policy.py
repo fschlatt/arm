@@ -1,39 +1,48 @@
+"""Arm policy, computes action based on cumulative clipped advantage values
+"""
 import torch
-
-from .arm import Arm
 
 
 class Policy():
+    """Arm policy - initialized with arbitrary network
+    that maps observations to vector of size one greater than
+    the size of the action space. If one step future prediction
+    is used, the network needs to implement a future toggle in
+    the forward function and return an output whose dimensions
+    are equal to the dimensions of a single observation.
+
+    If started in debug mode, debug logs of action values
+    and percentages are printed.
+
+    Arguments:
+        network {torch.nn.Module} -- arbitrary pytorch network
+
+    Keyword Arguments:
+        future {bool} -- toggle to use one step future prediction (default: {False})
+        debug {bool} -- toggle to enable debug logs (default: {False})
+    """
 
     def __init__(self, network, future=False, debug=False):
-        if not hasattr(network, 'forward'):
-            raise AttributeError('network is not valid pytorch module')
         self.network = network
         self.future = future
         self.debug = debug
 
         self.device = network.device
 
-    def update(self, network_state_dict):
-        self.network.load_state_dict(network_state_dict)
-
-    @classmethod
-    def load(cls, path, debug=False, device=torch.device('cpu')):
-
-        model = torch.load(path, map_location=device)
-
-        if isinstance(model, Arm):
-            network = model.network
-        else:
-            network = model
-
-        network.eval()
-
-        policy = cls(network, debug=debug)
-
-        return policy
+    def __call__(self, obs, action_dim):
+        return self.forward(obs, action_dim)
 
     def forward(self, obs, action_dim):
+        """Computes action from observations and action space
+        dimensionality
+
+        Arguments:
+            obs {torch.Tensor} -- tensor of observations
+            action_dim {int} -- dimensionality of actions space
+
+        Returns:
+            int -- action
+        """
         if self.future:
             action_input = torch.arange(action_dim).unsqueeze(1)
             obs = obs.expand(action_dim, *obs.shape[1:])
@@ -59,6 +68,3 @@ class Policy():
             print('action probs: ', action_probs)
             print('action: ', action)
         return action
-
-    def __call__(self, obs, action_dim):
-        return self.forward(obs, action_dim)
