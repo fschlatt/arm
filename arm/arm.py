@@ -1,3 +1,5 @@
+"""Arm module, used to train arm algorithm
+"""
 import copy
 
 import numpy as np
@@ -9,6 +11,24 @@ except ImportError:
 
 
 class Arm(torch.nn.Module):
+    """Arm algorithm - initialized with arbitrary network
+    that maps observations to vector of size one greater than
+    the size of the action space. If one step future prediction
+    is used, the network needs to implement a future toggle in
+    the forward function and return an output whose dimensions
+    are equal to the dimensions of a single observation.
+    Can be trained by passing a replay buffer to the `train_batch`
+    function.
+
+    Arguments:
+        network {torch.nn.Module} -- arbitrary pytorch network
+        iters {int} -- number of training iterations per batch
+        mini_batch_size {int} -- number of samples per iteration
+        tau {float} -- target network update offset
+
+    Keyword Arguments:
+        future {bool} -- toggle to use one step future prediction (default: {False})
+    """
 
     def __init__(self, network, iters, mini_batch_size, tau, future=False):
         super(Arm, self).__init__()
@@ -22,10 +42,9 @@ class Arm(torch.nn.Module):
         self.device = network.device
 
         self.epochs = 0
-
         self.steps = 0
 
-    def vectorize_trajectories(self, replay_buffer):
+    def __compute_targets(self, replay_buffer):
 
         first_batch = self.epochs == 0
         first_batch = False
@@ -61,7 +80,7 @@ class Arm(torch.nn.Module):
 
         return v_tar, q_tar
 
-    def sample_mini_batch(self, replay_buffer, v_tar, q_tar):
+    def __sample_mini_batch(self, replay_buffer, v_tar, q_tar):
 
         mb_idcs = np.random.choice(
             replay_buffer.curriculum_idcs.shape[0], self.mini_batch_size)
@@ -74,8 +93,8 @@ class Arm(torch.nn.Module):
             replay_buffer.est_rew_weights[replay_buffer.curriculum_idcs][mb_idcs])
         mb_est_non_zero = mb_est_rew_w.nonzero().squeeze()
         if mb_est_non_zero.numel():
-            mb_est_rew_idcs = (mb_idcs[mb_est_non_zero] + \
-                replay_buffer.n_step_size).reshape(-1)
+            mb_est_rew_idcs = (mb_idcs[mb_est_non_zero] +
+                               replay_buffer.n_step_size).reshape(-1)
             mb_v_prime_obs, _, mb_v_prime_actions = replay_buffer[mb_est_rew_idcs][:3]
             mb_v_prime_obs = mb_v_prime_obs
             mb_v_prime_actions = mb_v_prime_actions.astype(np.int64)
@@ -112,18 +131,64 @@ class Arm(torch.nn.Module):
         mb_q_tar = q_tar[mb_idcs].to(self.device) + val_est_mb
         return mb_v, mb_v_tar, mb_q, mb_q_tar, mb_pred_obs, mb_next_obs
 
+    def __reset_v_tar(self):
+        self.target_network.load_state_dict(self.network.state_dict())
+
+    def __update_target(self):
+        target_params = self.target_network.parameters()
+        params = self.network.parameters()
+
+        for target, net in zip(target_params, params):
+            target.data.add_(self.tau * (net.data - target.data))
+
+    def __update_network(self, mb_v, mb_v_tar, mb_q, mb_q_tar, mb_pred_obs, mb_next_obs):
+
+        obs_loss = torch.tensor(0.0)
+        if self.future:
+            self.network.optimizer.zero_grad()
+            obs_loss = self.network.criterion(mb_pred_obs, mb_next_obs)
+            obs_loss.backward()
+            self.network.optimizer.step()
+            obs_loss = obs_loss.detach().cpu()
+
+        self.network.optimizer.zero_grad()
+        v_loss = self.network.criterion(mb_v, mb_v_tar)
+        v_loss.backward(retain_graph=True)
+        self.network.optimizer.step()
+        v_loss = v_loss.detach().cpu()
+
+        self.network.optimizer.zero_grad()
+        q_loss = self.network.criterion(mb_q, mb_q_tar)
+        q_loss.backward()
+        self.network.optimizer.step()
+        q_loss = q_loss.detach().cpu()
+
+        return v_loss, q_loss, obs_loss
+
     def train_batch(self, replay_buffer, writer=None):
+        """Trains the network with samples from the replay buffer
+        using the arm algorithm. If a writer is passed, losses are
+        recorded.
+
+        Arguments:
+            replay_buffer {ReplayBuffer} -- replay buffer of samples
+
+        Keyword Arguments:
+            writer {tf.summary.SummaryWriter} -- optional tensorflow
+                                                 summary writer
+                                                 (default: {None})
+        """
 
         self.steps += len(replay_buffer)
 
-        print('preprocessing trajectories...')
-        v_tar, q_tar = self.vectorize_trajectories(replay_buffer)
+        print('computing target values...')
+        v_tar, q_tar = self.__compute_targets(replay_buffer)
 
         cum_v_loss = torch.tensor(0.0)
         cum_q_loss = torch.tensor(0.0)
         cum_obs_loss = torch.tensor(0.0)
 
-        self.reset_v_tar()
+        self.__reset_v_tar()
 
         print('training network...')
 
@@ -158,47 +223,11 @@ class Arm(torch.nn.Module):
                 if self.future:
                     print('batch: {}, v_loss: {}, q_loss: {}, obs_loss: {}'.format(
                         batch + 1, mean_v_loss, mean_q_loss, mean_obs_loss))
-                print('batch: {}, v_loss: {}, q_loss: {}'.format(
+                else:
+                    print('batch: {}, v_loss: {}, q_loss: {}'.format(
                         batch + 1, mean_v_loss, mean_q_loss))
                 cum_v_loss.zero_()
                 cum_q_loss.zero_()
                 cum_obs_loss.zero_()
 
         self.epochs += 1
-
-    def reset_v_tar(self):
-        self.target_network.load_state_dict(self.network.state_dict())
-
-    def expect_v_tar(self, obs):
-        return self.target_network(obs)
-
-    def update_target(self):
-        target_params = self.target_network.parameters()
-        params = self.network.parameters()
-
-        for target, net in zip(target_params, params):
-            target.data.add_(self.tau * (net.data - target.data))
-
-    def update_network(self, mb_v, mb_v_tar, mb_q, mb_q_tar, mb_pred_obs, mb_next_obs):
-
-        obs_loss = torch.tensor(0.0)
-        if self.future:
-            self.network.optimizer.zero_grad()
-            obs_loss = self.network.criterion(mb_pred_obs, mb_next_obs)
-            obs_loss.backward()
-            self.network.optimizer.step()
-            obs_loss = obs_loss.detach().cpu()
-
-        self.network.optimizer.zero_grad()
-        v_loss = self.network.criterion(mb_v, mb_v_tar)
-        v_loss.backward(retain_graph=True)
-        self.network.optimizer.step()
-        v_loss = v_loss.detach().cpu()
-
-        self.network.optimizer.zero_grad()
-        q_loss = self.network.criterion(mb_q, mb_q_tar)
-        q_loss.backward()
-        self.network.optimizer.step()
-        q_loss = q_loss.detach().cpu()
-
-        return v_loss, q_loss, obs_loss
