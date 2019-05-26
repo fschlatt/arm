@@ -6,9 +6,21 @@ This repository contains a pytorch implementation of advantage based regret mini
 
 The algorithm is split into three main parts. The replay buffer, the policy and the actual ARM algorithm. To train an agent, collect observations, actions, rewards etc... using the policy into a replay buffer. Then pass the replay buffer with the network used in the policy to the ARM algorithm.
 
+In pseudo code:
+
+```
+network = Network(...)
+policy = Policy(network)
+arm = Arm(network)
+for n epochs:
+    replay_buffer = run_env(policy)
+    replay_buffer.vectorize()
+    arm.train_batch(replay_buffer)
+```
+
 If you would like to use future prediction, the network must include a future toggle and include the action in its forward function `def forward(self, obs, action, future=False)`. If future is true, the forward pass must return an output with the same dimensions as a single observation.
 
-If you would like to use curriculum learning, pass curriculum bounds via the `vectorize()` function of the replay buffer. E.g. to train on only the last 20 steps of an episode, pass curriculum bounds of `(-20, 0)`. 
+If you would like to use curriculum learning, pass curriculum bounds via the `vectorize()` function of the replay buffer. E.g. to train on only the last 20 steps of an episode, pass curriculum bounds of `rep_buffer.vectorize(curriculum=(-20, 0), curriculum_mode='done')` or on the last 20 steps before a reward `rep_buffer.vectorize(curriculum=(-20, 0), curriculum_mode='reward')`. 
 
 To record the training results and losses in a tensorboard, use at least tensorflow 2.0. Install using `pip install -q tf-nightly-2.0-preview`.
 
