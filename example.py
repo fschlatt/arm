@@ -4,15 +4,16 @@ import gym
 import numpy as np
 import torch
 import torchvision
+from arm.arm import Arm
+from arm.buffer import ReplayBuffer
+from arm.policy import Policy
+
 try:
     import tensorflow as tf
     TENSORFLOW = True
 except ImportError:
     TENSORFLOW = False
 
-from arm.buffer import ReplayBuffer
-from arm.policy import Policy
-from arm.policy import Arm
 
 ARM_ITERS = 3000
 CURRICULUM = ()
@@ -50,7 +51,7 @@ def run_env(env: gym.Env, policy: Policy):
         total_reward = 0
         # only record every 4th frame
         for _ in range(4):
-            next_obs, reward, done, info = env.step(action)
+            next_obs, reward, done, _ = env.step(action)
             total_reward += reward
             if done:
                 break
@@ -66,6 +67,7 @@ def collect_rep_buffer(env: gym.Env, policy: Policy):
     replay_buffer = ReplayBuffer()
 
     start = time.time()
+    # accumulate replay buffer
     while len(replay_buffer) < REP_BUFFER_SIZE:
         replay_buffer += run_env(env, policy)
         print('collected {} steps, time elapsed: {}'.format(
@@ -81,10 +83,7 @@ def evaluate(arm: Arm, replay_buffer: ReplayBuffer, writer=None):
                              for trajectory in traj_rewards])
     mean_epi_steps = len(replay_buffer) / done_idcs.shape[0]
     print('mean episode steps: {}, avg reward: {}, min reward: {}, max reward: {}'.format(
-          mean_epi_steps,
-          traj_rewards.mean(),
-          traj_rewards.min(),
-          traj_rewards.max()))
+        mean_epi_steps, traj_rewards.mean(), traj_rewards.min(), traj_rewards.max()))
     if writer is not None:
         with writer.as_default():
             tf.summary.scalar('reward', traj_rewards.mean(), arm.epochs)
@@ -135,6 +134,7 @@ class Network(torch.nn.Module):
         return pred_obs
 
     def future_forward(self, obs, action, future=False):
+        # action unused but can be used to aid in prediction
         enabled = torch.is_grad_enabled()
         if not future:
             torch.set_grad_enabled(False)
