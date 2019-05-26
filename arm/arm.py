@@ -2,7 +2,10 @@ import copy
 
 import numpy as np
 import torch
-import tensorflow as tf
+try:
+    import tensorflow as tf
+except ImportError:
+    TENSORFLOW = False
 
 
 class Arm(torch.nn.Module):
@@ -138,7 +141,7 @@ class Arm(torch.nn.Module):
             cum_q_loss += q_loss
             cum_obs_loss += obs_loss
 
-            if writer is not None:
+            if writer is not None and TENSORFLOW:
                 with writer.as_default():
                     tf.summary.scalar(
                         'v_loss', v_loss.item(), self.epochs * self.iters + batch)
