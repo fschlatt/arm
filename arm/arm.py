@@ -4,6 +4,7 @@ import copy
 
 import numpy as np
 import torch
+
 try:
     import tensorflow as tf
 except ImportError:
@@ -55,6 +56,7 @@ class Arm(torch.nn.Module):
         else:
             evs = torch.tensor([])
             cfvs = torch.tensor([])
+            # compute q and v values of last iteration
             for obs, _, actions, *_ in replay_buffer.iterate(512, random=False, curriculum=True):
                 obs = torch.from_numpy(obs).to(self.device)
                 actions = torch.from_numpy(
@@ -70,25 +72,31 @@ class Arm(torch.nn.Module):
                 b_evs, b_cfvs = b_evs.cpu(), b_cfvs.cpu()
                 evs = torch.cat((evs, b_evs.cpu()))
                 cfvs = torch.cat((cfvs, b_cfvs.cpu()))
+            # compute advantage value and clip to 0
             q_plus = torch.clamp(cfvs - evs, min=0)
 
         n_step = torch.from_numpy(
             replay_buffer.n_step[replay_buffer.curriculum_idcs]).unsqueeze(1)
 
+        # set value target to n step rewards
         v_tar = n_step
+        # add n step rewards on top of advantage values (cumulative advantage values)
         q_tar = q_plus + n_step
 
         return v_tar, q_tar
 
     def __sample_mini_batch(self, replay_buffer, v_tar, q_tar):
 
+        # sample random batch from replay buffer indices
         mb_idcs = np.random.choice(
             replay_buffer.curriculum_idcs.shape[0], self.mini_batch_size)
         mb_obs, mb_next_obs, mb_actions = replay_buffer[replay_buffer.curriculum_idcs[mb_idcs]][:3]
 
+        # initialize value estimate
         val_est_mb = torch.zeros(
             (self.mini_batch_size, 1)).to(self.device)
 
+        # compute value estimate for non terminal nodes
         mb_est_rew_w = torch.from_numpy(
             replay_buffer.est_rew_weights[replay_buffer.curriculum_idcs][mb_idcs])
         mb_est_non_zero = mb_est_rew_w.nonzero().squeeze()
@@ -117,6 +125,7 @@ class Arm(torch.nn.Module):
         mb_actions = torch.from_numpy(mb_actions).to(
             self.device).unsqueeze(1)
 
+        # compute current v and q values
         if self.future:
             mb_v, mb_q = torch.split(self.network(
                 mb_obs, mb_actions), (1, self.network.action_dim), dim=1)
@@ -127,6 +136,7 @@ class Arm(torch.nn.Module):
             mb_v, mb_q = torch.split(self.network(
                 mb_obs), (1, self.network.action_dim), dim=1)
         mb_q = torch.gather(mb_q, dim=1, index=mb_actions)
+        # add value estimate onto target values
         mb_v_tar = v_tar[mb_idcs].to(self.device) + val_est_mb
         mb_q_tar = q_tar[mb_idcs].to(self.device) + val_est_mb
         return mb_v, mb_v_tar, mb_q, mb_q_tar, mb_pred_obs, mb_next_obs
@@ -134,7 +144,7 @@ class Arm(torch.nn.Module):
     def __reset_v_tar(self):
         self.target_network.load_state_dict(self.network.state_dict())
 
-    def __update_target(self):
+    def __update_v_target(self):
         target_params = self.target_network.parameters()
         params = self.network.parameters()
 
@@ -143,6 +153,7 @@ class Arm(torch.nn.Module):
 
     def __update_network(self, mb_v, mb_v_tar, mb_q, mb_q_tar, mb_pred_obs, mb_next_obs):
 
+        # compute loss of future sub network and backpropagate
         obs_loss = torch.tensor(0.0)
         if self.future:
             self.network.optimizer.zero_grad()
@@ -151,12 +162,14 @@ class Arm(torch.nn.Module):
             self.network.optimizer.step()
             obs_loss = obs_loss.detach().cpu()
 
+        # compute loss of v value and backpropagate
         self.network.optimizer.zero_grad()
         v_loss = self.network.criterion(mb_v, mb_v_tar)
         v_loss.backward(retain_graph=True)
         self.network.optimizer.step()
         v_loss = v_loss.detach().cpu()
 
+        # compute loss of v value and backpropagate
         self.network.optimizer.zero_grad()
         q_loss = self.network.criterion(mb_q, mb_q_tar)
         q_loss.backward()
@@ -181,32 +194,40 @@ class Arm(torch.nn.Module):
 
         self.steps += len(replay_buffer)
 
+        # precompute all target values
         print('computing target values...')
         v_tar, q_tar = self.__compute_targets(replay_buffer)
 
+        # initialize cumulative loss buffers
         cum_v_loss = torch.tensor(0.0)
         cum_q_loss = torch.tensor(0.0)
         cum_obs_loss = torch.tensor(0.0)
 
+        # reset value target network
         self.__reset_v_tar()
 
         print('training network...')
 
         for batch in range(self.iters):
 
-            mb_v, mb_v_tar, mb_q, mb_q_tar, mb_pred_obs, mb_next_obs = self.sample_mini_batch(
+            # sample mini batch
+            mb_v, mb_v_tar, mb_q, mb_q_tar, mb_pred_obs, mb_next_obs = self.__sample_mini_batch(
                 replay_buffer, v_tar, q_tar)
 
-            v_loss, q_loss, obs_loss = self.update_network(
+            # update network
+            v_loss, q_loss, obs_loss = self.__update_network(
                 mb_v, mb_v_tar, mb_q, mb_q_tar, mb_pred_obs, mb_next_obs)
 
-            self.update_target()
+            # update target network
+            self.__update_v_target()
 
+            # accumulate loss
             cum_v_loss += v_loss
             cum_q_loss += q_loss
             cum_obs_loss += obs_loss
 
             if writer is not None and TENSORFLOW:
+                # write loss to summary writer
                 with writer.as_default():
                     tf.summary.scalar(
                         'v_loss', v_loss.item(), self.epochs * self.iters + batch)
@@ -217,6 +238,7 @@ class Arm(torch.nn.Module):
                             'obs_loss', obs_loss.item(), self.epochs * self.iters + batch)
 
             if (batch + 1) % int(self.iters / 10) == 0:
+                # print loss to console
                 mean_v_loss = (cum_v_loss/int(self.iters / 10)).numpy()
                 mean_q_loss = (cum_q_loss/int(self.iters / 10)).numpy()
                 mean_obs_loss = (cum_obs_loss/int(self.iters / 10)).numpy()
