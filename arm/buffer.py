@@ -53,7 +53,7 @@ class ReplayBuffer():
     def __len__(self):
         return len(self.rewards)
 
-    def __vec_idcs(self):
+    def __vec_idcs(self, mode):
         # episode start indices
         epi_start_idcs = np.insert(np.nonzero(
             self.vec_done)[0][:-1] + 1, 0, 0)
@@ -89,7 +89,7 @@ class ReplayBuffer():
         idcs[insert_idcs] = insert
         self.obs_idcs = idcs
 
-        self.__compute_curriculum()
+        self.__compute_curriculum(mode)
 
     def __n_step_reward(self):
         rewards = self.vec_rewards
@@ -107,10 +107,14 @@ class ReplayBuffer():
         self.n_step = n_step.astype(np.float32)
         self.est_rew_weights = est_rew_weights.astype(np.float32)
 
-    def __compute_curriculum(self):
-        epi_start_idcs = np.insert(np.nonzero(
-            self.done)[0][:-1] + 1, 0, 0)
+    def __compute_curriculum(self, mode):
         if self.curriculum:
+            if mode == 'done':
+                epi_start_idcs = np.insert(
+                    np.nonzero(self.vec_done)[0][:-1] + 1, 0, 0)
+            elif mode == 'reward':
+                epi_start_idcs = np.insert(np.nonzero(
+                    self.vec_rewards)[0][:-1] + 1, 0, 0)
             curriculum_idcs = np.arange(*self.curriculum)
             bounded_length = curriculum_idcs.shape[0]
             if curriculum_idcs[0] < 0:
@@ -120,6 +124,7 @@ class ReplayBuffer():
             curriculum_idcs = np.tile(curriculum_idcs, epi_idcs.shape[0])
             curriculum_idcs = curriculum_idcs + \
                 np.repeat(epi_idcs, bounded_length)
+            curriculum_idcs = np.unique(curriculum_idcs)
             self.curriculum_idcs = self.idcs[curriculum_idcs]
         else:
             self.curriculum_idcs = self.idcs
@@ -170,7 +175,11 @@ class ReplayBuffer():
 
             yield self[idcs]
 
-    def vectorize(self, frame_buffer=0, curriculum=(), n_step_size=0, gamma=0):
+    def vectorize(self, frame_buffer=0,
+                  curriculum=(),
+                  n_step_size=0,
+                  gamma=0,
+                  curriculum_mode='done'):
         self.__vectorize()
         idcs = False or len(self) != self.idcs.shape[0]
         if frame_buffer and frame_buffer != self.frame_buffer:
@@ -180,7 +189,7 @@ class ReplayBuffer():
             self.curriculum = curriculum
             idcs = True
         if idcs:
-            self.__vec_idcs()
+            self.__vec_idcs(curriculum_mode)
         n_step_reward = False or len(self) != self.n_step.shape[0]
         if n_step_size and n_step_size != self.n_step_size:
             self.n_step_size = n_step_size
