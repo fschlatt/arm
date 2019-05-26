@@ -1,6 +1,6 @@
 # Advantage Based Regret Minimization
 
-This repository contains a pytorch implementation of advantage based regret minimization from Jin et. al. [1], with some further additions. These include combining the advantage and value networks into one and adding the option for simple curriculum learning and future prediction. The algorithm is designed to be as general as possible and can be used to train and arbitrary pytorch network on an arbitrary environment.
+This repository contains a pytorch implementation of advantage based regret minimization from Jin et. al. [1], with some further additions. These include combining the advantage and value networks into one and adding the option for simple curriculum learning and future prediction. The algorithm is designed to be as general as possible and can be used to train an arbitrary pytorch network on an arbitrary environment.
 
 ## How to train
 
