@@ -18,9 +18,8 @@ class Policy():
         debug {bool} -- toggle to enable debug logs (default: {False})
     """
 
-    def __init__(self, network, future=False, debug=False):
+    def __init__(self, network, debug=False):
         self.network = network
-        self.future = future
         self.debug = debug
 
         self.device = network.device
