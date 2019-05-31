@@ -91,23 +91,13 @@ def evaluate(arm: Arm, replay_buffer: ReplayBuffer, writer=None):
 
 class Network(torch.nn.Module):
 
-    def __init__(self, frame_buffer, action_dim, lr, future=False, device=torch.device('cpu')):
+    def __init__(self, frame_buffer, action_dim, lr, device=torch.device('cpu')):
         super(Network, self).__init__()
 
         self.action_dim = action_dim
-        self.future = future
         self.device = device
 
-        if future:
-            self.pred_conv1 = torch.nn.Conv2d(
-                frame_buffer, frame_buffer, 3, padding=1)
-            self.pred_conv2 = torch.nn.Conv2d(frame_buffer, 1, 3, padding=1)
-            self.conv1 = torch.nn.Conv2d(frame_buffer + 1, 16, 3, padding=1)
-            self.forward = self.future_forward
-        else:
-            self.conv1 = torch.nn.Conv2d(frame_buffer, 16, 3, padding=1)
-            self.forward = self.standard_forward
-
+        self.conv1 = torch.nn.Conv2d(frame_buffer, 16, 3, padding=1)
         self.conv2 = torch.nn.Conv2d(16, 16, 8, 4)
         self.conv3 = torch.nn.Conv2d(16, 32, 4, 2)
         self.fc1 = torch.nn.Linear(32*9*9, 256)
@@ -119,36 +109,13 @@ class Network(torch.nn.Module):
         self.optimizer = torch.optim.Adam(
             self.parameters(), lr=lr)
 
-    def value(self, obs):
+    def forward(self, obs):
         out = torch.nn.functional.relu(self.conv1(obs))
         out = torch.nn.functional.relu(self.conv2(out))
         out = torch.nn.functional.relu(self.conv3(out))
         out = out.view(out.size(0), -1)
         out = torch.nn.functional.relu(self.fc1(out))
         out = self.fc2(out)
-        return out
-
-    def prediction(self, obs):
-        pred_obs = torch.nn.functional.relu(self.pred_conv1(obs))
-        pred_obs = torch.nn.functional.relu(self.pred_conv2(obs))
-        return pred_obs
-
-    def future_forward(self, obs, action, future=False):
-        # action unused but can be used to aid in prediction
-        enabled = torch.is_grad_enabled()
-        if not future:
-            torch.set_grad_enabled(False)
-        pred_obs = self.prediction(obs)
-        if future:
-            return pred_obs.squeeze(1)
-        if enabled and not torch.is_grad_enabled():
-            torch.set_grad_enabled(True)
-        obs = torch.cat((obs, pred_obs), dim=1)
-        out = self.value(obs)
-        return out
-
-    def standard_forward(self, obs):
-        out = self.value(obs)
         return out
 
 
@@ -163,10 +130,10 @@ def train_arm():
         'cuda') if torch.cuda.is_available() else torch.device('cpu')
 
     network = Network(FRAME_BUFFER, env.action_space.n,
-                      LEARN_RATE, future=FUTURE, device=device)
+                      LEARN_RATE, device=device)
 
-    arm = Arm(network, ARM_ITERS, MINI_BATCH_SIZE, TAU, future=FUTURE)
-    policy = Policy(network, future=FUTURE)
+    arm = Arm(network, ARM_ITERS, MINI_BATCH_SIZE, TAU)
+    policy = Policy(network)
 
     while arm.epochs < EPOCHS:
 

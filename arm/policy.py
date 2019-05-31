@@ -6,10 +6,7 @@ import torch
 class Policy():
     """Arm policy - initialized with arbitrary network
     that maps observations to vector of size one greater than
-    the size of the action space. If one step future prediction
-    is used, the network needs to implement a future toggle in
-    the forward function and return an output whose dimensions
-    are equal to the dimensions of a single observation.
+    the size of the action space.
 
     If started in debug mode, debug logs of action values
     and percentages are printed.
@@ -18,7 +15,6 @@ class Policy():
         network {torch.nn.Module} -- arbitrary pytorch network
 
     Keyword Arguments:
-        future {bool} -- toggle to use one step future prediction (default: {False})
         debug {bool} -- toggle to enable debug logs (default: {False})
     """
 
@@ -43,19 +39,10 @@ class Policy():
         Returns:
             int -- action
         """
-        if self.future:
-            action_input = torch.arange(action_dim).unsqueeze(1)
-            obs = obs.expand(action_dim, *obs.shape[1:])
-            with torch.no_grad():
-                value = self.network(obs, action_input)
-            expected_value = value[:, 0].mean()
-            cf_values = value[:, 1:][torch.arange(
-                action_dim), torch.arange(action_dim)]
-        else:
-            value = self.network(obs)
-            expected_value = value[:, 0]
-            cf_values = value[:, 1:]
-        action_values = torch.clamp(cf_values - expected_value, min=0.0)
+        values = self.network(obs)
+        expected_values = values[:, 0]
+        cf_values = values[:, 1:]
+        action_values = torch.clamp(cf_values - expected_values, min=0.0)
         if torch.sum(action_values):
             action_probs = action_values / torch.sum(action_values)
         else:
@@ -63,7 +50,7 @@ class Policy():
         action = int(torch.multinomial(action_probs, 1))
         if self.debug:
             print('q_plus: ', cf_values)
-            print('v: ', expected_value)
+            print('v: ', expected_values)
             print('action values: ', action_values)
             print('action probs: ', action_probs)
             print('action: ', action)

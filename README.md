@@ -1,6 +1,6 @@
 # Advantage Based Regret Minimization
 
-This repository contains a pytorch implementation of advantage based regret minimization from Jin et. al. [1], with some further additions. These include combining the advantage and value networks into one and adding the option for simple curriculum learning and future prediction. The algorithm is designed to be as general as possible and can be used to train an arbitrary pytorch network on an arbitrary environment.
+This repository contains a pytorch implementation of advantage based regret minimization from Jin et. al. [1], with some further additions. These include combining the advantage and value networks into one and adding the option for simple curriculum learning. The algorithm is designed to be as general as possible and can be used to train an arbitrary pytorch network on an arbitrary environment.
 
 ## How to train
 
@@ -17,8 +17,6 @@ for n epochs:
     replay_buffer.vectorize()
     arm.train_batch(replay_buffer)
 ```
-
-If you would like to use future prediction, the network must include a future toggle and include the action in its forward function `def forward(self, obs, action, future=False)`. If future is true, the forward pass must return an output with the same dimensions as a single observation.
 
 If you would like to use curriculum learning, pass curriculum bounds via the `vectorize()` function of the replay buffer. E.g. to train on only the last 20 steps of an episode, pass curriculum bounds of `rep_buffer.vectorize(curriculum=(-20, 0), curriculum_mode='done')` or on the last 20 steps before a reward `rep_buffer.vectorize(curriculum=(-20, 0), curriculum_mode='reward')`. 
 

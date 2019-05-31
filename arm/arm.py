@@ -15,11 +15,8 @@ except ImportError:
 class Arm(torch.nn.Module):
     """Arm algorithm - initialized with arbitrary network
     that maps observations to vector of size one greater than
-    the size of the action space. If one step future prediction
-    is used, the network needs to implement a future toggle in
-    the forward function and return an output whose dimensions
-    are equal to the dimensions of a single observation.
-    Can be trained by passing a replay buffer to the `train_batch`
+    the size of the action space. Can be trained by passing
+    a replay buffer to the `train_batch` function
     function.
 
     Arguments:
@@ -27,12 +24,9 @@ class Arm(torch.nn.Module):
         iters {int} -- number of training iterations per batch
         mini_batch_size {int} -- number of samples per iteration
         tau {float} -- target network update offset
-
-    Keyword Arguments:
-        future {bool} -- toggle to use one step future prediction (default: {False})
     """
 
-    def __init__(self, network, iters, mini_batch_size, tau, future=False):
+    def __init__(self, network, iters, mini_batch_size, tau):
         super(Arm, self).__init__()
 
         self.network = network
@@ -40,7 +34,6 @@ class Arm(torch.nn.Module):
         self.iters = iters
         self.mini_batch_size = mini_batch_size
         self.tau = tau
-        self.future = future
         self.device = network.device
 
         self.epochs = 0
@@ -63,12 +56,8 @@ class Arm(torch.nn.Module):
                 actions = torch.from_numpy(
                     actions).unsqueeze(1).to(self.device)
                 with torch.no_grad():
-                    if self.future:
-                        b_evs, b_cfvs = torch.split(self.network(
-                            obs, actions), (1, self.network.action_dim), dim=1)
-                    else:
-                        b_evs, b_cfvs = torch.split(self.network(
-                            obs), (1, self.network.action_dim), dim=1)
+                    b_evs, b_cfvs = torch.split(self.network(
+                        obs), (1, self.network.action_dim), dim=1)
                 b_cfvs = torch.gather(b_cfvs, 1, actions)
                 b_evs, b_cfvs = b_evs.cpu(), b_cfvs.cpu()
                 evs = torch.cat((evs, b_evs.cpu()))
@@ -91,7 +80,7 @@ class Arm(torch.nn.Module):
         # sample random batch from replay buffer indices
         mb_idcs = np.random.choice(
             replay_buffer.curriculum_idcs.shape[0], self.mini_batch_size)
-        mb_obs, mb_next_obs, mb_actions = replay_buffer[replay_buffer.curriculum_idcs[mb_idcs]][:3]
+        mb_obs, _, mb_actions, *_ = replay_buffer[replay_buffer.curriculum_idcs[mb_idcs]]
 
         # initialize value estimate
         val_est_mb = torch.zeros(
@@ -104,7 +93,7 @@ class Arm(torch.nn.Module):
         if mb_est_non_zero.numel():
             mb_est_rew_idcs = (mb_idcs[mb_est_non_zero] +
                                replay_buffer.n_step_size).reshape(-1)
-            mb_v_prime_obs, _, mb_v_prime_actions = replay_buffer[mb_est_rew_idcs][:3]
+            mb_v_prime_obs, _, mb_v_prime_actions, *_ = replay_buffer[mb_est_rew_idcs]
             mb_v_prime_obs = mb_v_prime_obs
             mb_v_prime_actions = mb_v_prime_actions.astype(np.int64)
             mb_v_prime_obs = torch.from_numpy(
@@ -113,12 +102,8 @@ class Arm(torch.nn.Module):
                 mb_v_prime_actions).to(self.device)
 
             with torch.no_grad():
-                if self.future:
-                    val_est = self.target_network(
-                        mb_v_prime_obs, mb_v_prime_actions)[:, :1]
-                else:
-                    val_est = self.target_network(
-                        mb_v_prime_obs)[:, :1]
+                val_est = self.target_network(
+                    mb_v_prime_obs, mb_v_prime_actions)[:, :1]
             val_est = val_est * replay_buffer.gamma**replay_buffer.n_step_size
             val_est_mb.index_add_(0, mb_est_non_zero.to(self.device), val_est)
 
@@ -127,20 +112,13 @@ class Arm(torch.nn.Module):
             self.device).unsqueeze(1)
 
         # compute current v and q values
-        if self.future:
-            mb_v, mb_q = torch.split(self.network(
-                mb_obs, mb_actions), (1, self.network.action_dim), dim=1)
-            mb_next_obs = torch.from_numpy(mb_next_obs).to(self.device)
-            mb_pred_obs = self.network(mb_obs, mb_actions, future=True)
-        else:
-            mb_pred_obs, mb_next_obs = None, None
-            mb_v, mb_q = torch.split(self.network(
-                mb_obs), (1, self.network.action_dim), dim=1)
+        mb_v, mb_q = torch.split(self.network(
+            mb_obs), (1, self.network.action_dim), dim=1)
         mb_q = torch.gather(mb_q, dim=1, index=mb_actions)
         # add value estimate onto target values
         mb_v_tar = v_tar[mb_idcs].to(self.device) + val_est_mb
         mb_q_tar = q_tar[mb_idcs].to(self.device) + val_est_mb
-        return mb_v, mb_v_tar, mb_q, mb_q_tar, mb_pred_obs, mb_next_obs
+        return mb_v, mb_v_tar, mb_q, mb_q_tar
 
     def __reset_v_tar(self):
         self.target_network.load_state_dict(self.network.state_dict())
@@ -152,17 +130,7 @@ class Arm(torch.nn.Module):
         for target, net in zip(target_params, params):
             target.data.add_(self.tau * (net.data - target.data))
 
-    def __update_network(self, mb_v, mb_v_tar, mb_q, mb_q_tar, mb_pred_obs, mb_next_obs):
-
-        # compute loss of future sub network and backpropagate
-        obs_loss = torch.tensor(0.0)
-        if self.future:
-            self.network.optimizer.zero_grad()
-            obs_loss = self.network.criterion(mb_pred_obs, mb_next_obs)
-            obs_loss.backward()
-            self.network.optimizer.step()
-            obs_loss = obs_loss.detach().cpu()
-
+    def __update_network(self, mb_v, mb_v_tar, mb_q, mb_q_tar):
         # compute loss of v value and backpropagate
         self.network.optimizer.zero_grad()
         v_loss = self.network.criterion(mb_v, mb_v_tar)
@@ -177,7 +145,7 @@ class Arm(torch.nn.Module):
         self.network.optimizer.step()
         q_loss = q_loss.detach().cpu()
 
-        return v_loss, q_loss, obs_loss
+        return v_loss, q_loss
 
     def train_batch(self, replay_buffer, writer=None):
         """Trains the network with samples from the replay buffer
@@ -212,12 +180,12 @@ class Arm(torch.nn.Module):
         for batch in range(self.iters):
 
             # sample mini batch
-            mb_v, mb_v_tar, mb_q, mb_q_tar, mb_pred_obs, mb_next_obs = self.__sample_mini_batch(
+            mb_v, mb_v_tar, mb_q, mb_q_tar = self.__sample_mini_batch(
                 replay_buffer, v_tar, q_tar)
 
             # update network
-            v_loss, q_loss, obs_loss = self.__update_network(
-                mb_v, mb_v_tar, mb_q, mb_q_tar, mb_pred_obs, mb_next_obs)
+            v_loss, q_loss = self.__update_network(
+                mb_v, mb_v_tar, mb_q, mb_q_tar)
 
             # update target network
             self.__update_v_target()
@@ -225,7 +193,6 @@ class Arm(torch.nn.Module):
             # accumulate loss
             cum_v_loss += v_loss
             cum_q_loss += q_loss
-            cum_obs_loss += obs_loss
 
             if writer is not None and TENSORFLOW:
                 # write loss to summary writer
@@ -234,23 +201,14 @@ class Arm(torch.nn.Module):
                         'v_loss', v_loss.item(), self.epochs * self.iters + batch)
                     tf.summary.scalar(
                         'q_loss', q_loss.item(), self.epochs * self.iters + batch)
-                    if self.future:
-                        tf.summary.scalar(
-                            'obs_loss', obs_loss.item(), self.epochs * self.iters + batch)
 
             if (batch + 1) % int(self.iters / 10) == 0:
                 # print loss to console
                 mean_v_loss = (cum_v_loss/int(self.iters / 10)).numpy()
                 mean_q_loss = (cum_q_loss/int(self.iters / 10)).numpy()
-                mean_obs_loss = (cum_obs_loss/int(self.iters / 10)).numpy()
-                if self.future:
-                    print('batch: {}, v_loss: {}, q_loss: {}, obs_loss: {}'.format(
-                        batch + 1, mean_v_loss, mean_q_loss, mean_obs_loss))
-                else:
-                    print('batch: {}, v_loss: {}, q_loss: {}'.format(
-                        batch + 1, mean_v_loss, mean_q_loss))
+                print('batch: {}, v_loss: {}, q_loss: {}'.format(
+                    batch + 1, mean_v_loss, mean_q_loss))
                 cum_v_loss.zero_()
                 cum_q_loss.zero_()
-                cum_obs_loss.zero_()
 
         self.epochs += 1
