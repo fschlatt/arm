@@ -56,8 +56,9 @@ class Arm(torch.nn.Module):
                 actions = torch.from_numpy(
                     actions).unsqueeze(1).to(self.device)
                 with torch.no_grad():
-                    b_evs, b_cfvs = torch.split(self.network(
-                        obs), (1, self.network.action_dim), dim=1)
+                    b_values = self.network(obs)
+                    b_evs = b_values[:, 0]
+                    b_cfvs = b_values[:, 1:]
                 b_cfvs = torch.gather(b_cfvs, 1, actions)
                 b_evs, b_cfvs = b_evs.cpu(), b_cfvs.cpu()
                 evs = torch.cat((evs, b_evs.cpu()))
@@ -112,8 +113,9 @@ class Arm(torch.nn.Module):
             self.device).unsqueeze(1)
 
         # compute current v and q values
-        mb_v, mb_q = torch.split(self.network(
-            mb_obs), (1, self.network.action_dim), dim=1)
+        mb_values = self.network(mb_obs)
+        mb_v = mb_values[:, 0]
+        mb_q = mb_values[:, 1:]
         mb_q = torch.gather(mb_q, dim=1, index=mb_actions)
         # add value estimate onto target values
         mb_v_tar = v_tar[mb_idcs].to(self.device) + val_est_mb
