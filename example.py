@@ -55,9 +55,8 @@ def run_env(env: gym.Env, policy: Policy):
             total_reward += reward
             if done:
                 break
-        total_done = bool(total_reward) or done
         next_obs = preprocess(next_obs)
-        replay_buffer.append(obs, next_obs, action, total_reward, total_done)
+        replay_buffer.append(obs, next_obs, action, total_reward, done)
         obs = next_obs
         obs_arr = obs_arr[1:] + [obs]
     return replay_buffer
