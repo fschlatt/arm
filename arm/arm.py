@@ -103,8 +103,7 @@ class Arm(torch.nn.Module):
                 mb_v_prime_actions).to(self.device)
 
             with torch.no_grad():
-                val_est = self.target_network(
-                    mb_v_prime_obs, mb_v_prime_actions)[:, :1]
+                val_est = self.target_network(mb_v_prime_obs)[:, :1]
             val_est = val_est * replay_buffer.gamma**replay_buffer.n_step_size
             val_est_mb.index_add_(0, mb_est_non_zero.to(self.device), val_est)
 
