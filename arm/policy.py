@@ -24,16 +24,15 @@ class Policy():
 
         self.device = network.device
 
-    def __call__(self, obs, action_dim):
-        return self.forward(obs, action_dim)
+    def __call__(self, obs):
+        return self.forward(obs)
 
-    def forward(self, obs, action_dim):
+    def forward(self, obs):
         """Computes action from observations and action space
         dimensionality
 
         Arguments:
             obs {torch.Tensor} -- tensor of observations
-            action_dim {int} -- dimensionality of actions space
 
         Returns:
             int -- action
@@ -45,6 +44,7 @@ class Policy():
         if torch.sum(action_values):
             action_probs = action_values / torch.sum(action_values)
         else:
+            action_dim = action_values.shape[-1]
             action_probs = torch.full([action_dim], 1/action_dim)
         action = int(torch.multinomial(action_probs, 1))
         if self.debug:
