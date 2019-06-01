@@ -51,13 +51,13 @@ class Arm(torch.nn.Module):
             evs = torch.tensor([])
             cfvs = torch.tensor([])
             # compute q and v values of last iteration
-            for obs, _, actions, *_ in replay_buffer.iterate(512, random=False, curriculum=True):
+            for obs, _, actions, *_ in replay_buffer.iterate(batch_size=512, curriculum=True):
                 obs = torch.from_numpy(obs).to(self.device)
                 actions = torch.from_numpy(
                     actions).unsqueeze(1).to(self.device)
                 with torch.no_grad():
                     b_values = self.network(obs)
-                    b_evs = b_values[:, 0]
+                    b_evs = b_values[:, :1]
                     b_cfvs = b_values[:, 1:]
                 b_cfvs = torch.gather(b_cfvs, 1, actions)
                 b_evs, b_cfvs = b_evs.cpu(), b_cfvs.cpu()
@@ -113,7 +113,7 @@ class Arm(torch.nn.Module):
 
         # compute current v and q values
         mb_values = self.network(mb_obs)
-        mb_v = mb_values[:, 0]
+        mb_v = mb_values[:, :1]
         mb_q = mb_values[:, 1:]
         mb_q = torch.gather(mb_q, dim=1, index=mb_actions)
         # add value estimate onto target values
@@ -171,7 +171,6 @@ class Arm(torch.nn.Module):
         # initialize cumulative loss buffers
         cum_v_loss = torch.tensor(0.0)
         cum_q_loss = torch.tensor(0.0)
-        cum_obs_loss = torch.tensor(0.0)
 
         # reset value target network
         self.__reset_v_tar()
