@@ -47,7 +47,7 @@ def run_env(env: gym.Env, policy: Policy):
     obs_arr = [obs] * FRAME_BUFFER
     while not done:
         torch_obs = torch.tensor(obs_arr).unsqueeze(0).to(policy.device)
-        action = policy(torch_obs, env.action_space.n)
+        action = policy(torch_obs)
         total_reward = 0
         # only record every 4th frame
         for _ in range(4):
