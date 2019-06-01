@@ -70,40 +70,42 @@ class ReplayBuffer():
         return len(self.rewards)
 
     def __vec_idcs(self, mode):
-        # episode start indices
-        epi_start_idcs = np.insert(np.nonzero(
-            self.vec_done)[0][:-1] + 1, 0, 0)
-
         # init index array
         self.idcs = np.arange(len(self))
 
-        idcs = np.repeat(self.idcs, self.frame_buffer)
-        idcs = idcs.reshape(len(self), self.frame_buffer)
-        # subtract frame buffer length
-        idx_sub = np.arange(self.frame_buffer-1, -1, -1)
-        idx_sub = np.tile(idx_sub, len(self)).reshape(-1, self.frame_buffer)
-        idcs = idcs - idx_sub
+        if self.frame_buffer > 1:
+            # episode start indices
+            epi_start_idcs = np.insert(np.nonzero(
+                self.vec_done)[0][:-1] + 1, 0, 0)
+            idcs = np.repeat(self.idcs, self.frame_buffer)
+            idcs = idcs.reshape(len(self), self.frame_buffer)
+            # subtract frame buffer length
+            idx_sub = np.arange(self.frame_buffer-1, -1, -1)
+            idx_sub = np.tile(idx_sub, len(self)).reshape(-1, self.frame_buffer)
+            idcs = idcs - idx_sub
 
-        # compute frame buffer overlap insert and corresponding idcs
-        insert = np.cumsum(
-            np.ones((self.frame_buffer - 1, self.frame_buffer)), 1).astype(int)
-        # add consecutive larger number to each row
-        insert = (insert.T + np.arange(self.frame_buffer - 1)).T
-        # subtract frame buffer and clip to zero
-        insert = np.clip(insert - self.frame_buffer, 0, None)
-        # repeat for number of episodes
-        insert = np.tile(insert.T, epi_start_idcs.shape[0]).T
-        # add episode index to start insert
-        rep_epi_start = np.repeat(epi_start_idcs, self.frame_buffer - 1)
-        insert = (insert.T + rep_epi_start).T
+            # compute frame buffer overlap insert and corresponding idcs
+            insert = np.cumsum(
+                np.ones((self.frame_buffer - 1, self.frame_buffer)), 1).astype(int)
+            # add consecutive larger number to each row
+            insert = (insert.T + np.arange(self.frame_buffer - 1)).T
+            # subtract frame buffer and clip to zero
+            insert = np.clip(insert - self.frame_buffer, 0, None)
+            # repeat for number of episodes
+            insert = np.tile(insert.T, epi_start_idcs.shape[0]).T
+            # add episode index to start insert
+            rep_epi_start = np.repeat(epi_start_idcs, self.frame_buffer - 1)
+            insert = (insert.T + rep_epi_start).T
 
-        # add frame buffer range onto insert idcs
-        insert_idcs = rep_epi_start + np.tile(np.arange(self.frame_buffer - 1),
-                                              epi_start_idcs.shape[0])
+            # add frame buffer range onto insert idcs
+            insert_idcs = rep_epi_start + np.tile(np.arange(self.frame_buffer - 1),
+                                                epi_start_idcs.shape[0])
 
-        # insert frame buffer overlap at indices
-        idcs[insert_idcs] = insert
-        self.obs_idcs = idcs
+            # insert frame buffer overlap at indices
+            idcs[insert_idcs] = insert
+            self.obs_idcs = idcs
+        else:
+            self.obs_idcs = self.idcs
 
         self.__compute_curriculum(mode)
 
