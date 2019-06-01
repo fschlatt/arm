@@ -169,7 +169,7 @@ class ReplayBuffer():
 
         return self
 
-    def iterate(self, batch_size=0, random=False, curriculum=False):
+    def iterate(self, batch_size=1, random=False, curriculum=False):
         """Generator to iterate over replay buffer
 
         Keyword Arguments:
