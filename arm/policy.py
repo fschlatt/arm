@@ -49,9 +49,9 @@ class Policy():
             action_probs = torch.full([action_dim], 1/action_dim)
         action = int(torch.multinomial(action_probs, 1))
         if self.debug:
-            print('q_plus: ', cf_values)
-            print('v: ', expected_values)
-            print('action values: ', action_values)
-            print('action probs: ', action_probs)
+            print('q_plus: ', cf_values.cpu().numpy())
+            print('v: ', expected_values.cpu().numpy())
+            print('action values: ', action_values.cpu().numpy())
+            print('action probs: ', action_probs.cpu().numpy())
             print('action: ', action)
         return action
