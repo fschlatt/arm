@@ -4,6 +4,6 @@
 \"Regret minimization for partially observable deep reinforcement learning.\"
 arXiv preprint arXiv:1710.11424 (2017).
 """
-from arm.arm import Arm
-from arm.buffer import ReplayBuffer
-from arm.policy import Policy
+from .arm import Arm
+from .buffer import ReplayBuffer
+from .policy import Policy
