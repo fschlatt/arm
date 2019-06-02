@@ -81,7 +81,8 @@ class ReplayBuffer():
             idcs = idcs.reshape(len(self), self.frame_buffer)
             # subtract frame buffer length
             idx_sub = np.arange(self.frame_buffer-1, -1, -1)
-            idx_sub = np.tile(idx_sub, len(self)).reshape(-1, self.frame_buffer)
+            idx_sub = np.tile(idx_sub, len(
+                self)).reshape(-1, self.frame_buffer)
             idcs = idcs - idx_sub
 
             # compute frame buffer overlap insert and corresponding idcs
@@ -99,7 +100,7 @@ class ReplayBuffer():
 
             # add frame buffer range onto insert idcs
             insert_idcs = rep_epi_start + np.tile(np.arange(self.frame_buffer - 1),
-                                                epi_start_idcs.shape[0])
+                                                  epi_start_idcs.shape[0])
 
             # insert frame buffer overlap at indices
             idcs[insert_idcs] = insert
@@ -150,13 +151,6 @@ class ReplayBuffer():
         else:
             self.curriculum_idcs = self.idcs
 
-    def append(self, obs, next_obs, action, reward, done):
-        self.obs.append(np.array(obs, dtype=np.float32))
-        self.next_obs.append(np.array(next_obs, dtype=np.float32))
-        self.actions.append(np.array(action, dtype=np.int64))
-        self.rewards.append(np.array(reward, dtype=np.float32))
-        self.done.append(np.array(done, dtype=np.int64))
-
     def __vectorize(self):
         if self.vec_obs.shape[0] != len(self):
             self.vec_obs = np.stack(self.obs).astype(np.float32)
@@ -170,6 +164,13 @@ class ReplayBuffer():
             self.vec_done = np.stack(self.done).astype(np.int64)
 
         return self
+
+    def append(self, obs, next_obs, action, reward, done):
+        self.obs.append(np.array(obs, dtype=np.float32))
+        self.next_obs.append(np.array(next_obs, dtype=np.float32))
+        self.actions.append(np.array(action, dtype=np.int64))
+        self.rewards.append(np.array(reward, dtype=np.float32))
+        self.done.append(np.array(done, dtype=np.int64))
 
     def iterate(self, batch_size=1, random=False, curriculum=False):
         """Generator to iterate over replay buffer
