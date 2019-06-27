@@ -90,10 +90,10 @@ class Arm(torch.nn.Module):
 
         # compute value estimate for non terminal nodes
         mb_est_rew_w = torch.from_numpy(
-            replay_buffer.est_rew_weights[replay_buffer.curriculum_idcs][mb_idcs])
+            replay_buffer.est_rew_weights[replay_buffer.curriculum_idcs[mb_idcs]])
         mb_est_non_zero = mb_est_rew_w.nonzero().squeeze()
         if mb_est_non_zero.numel():
-            mb_est_rew_idcs = (mb_idcs[mb_est_non_zero] +
+            mb_est_rew_idcs = (replay_buffer.curriculum_idcs[mb_idcs] +
                                replay_buffer.n_step_size).reshape(-1)
             mb_v_prime_obs, _, mb_v_prime_actions, * \
                 _ = replay_buffer[mb_est_rew_idcs]
