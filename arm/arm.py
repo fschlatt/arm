@@ -178,7 +178,9 @@ class Arm(torch.nn.Module):
 
         curriculum_percent = replay_buffer.curriculum_idcs.shape[0] / len(replay_buffer)
 
-        for batch in range(int(self.iters * curriculum_percent)):
+        iters = int(self.iters * curriculum_percent)
+
+        for batch in range(iters):
 
             # sample mini batch
             mb_v, mb_v_tar, mb_q, mb_q_tar = self.__sample_mini_batch(
@@ -199,14 +201,14 @@ class Arm(torch.nn.Module):
                 # write loss to summary writer
                 with writer.as_default():
                     tf.summary.scalar(
-                        'v_loss', v_loss.item(), self.epochs * self.iters + batch)
+                        'v_loss', v_loss.item(), self.epochs * iters + batch)
                     tf.summary.scalar(
-                        'q_loss', q_loss.item(), self.epochs * self.iters + batch)
+                        'q_loss', q_loss.item(), self.epochs * iters + batch)
 
-            if (batch + 1) % int(self.iters / 10) == 0:
+            if (batch + 1) % int(iters / 10) == 0:
                 # print loss to console
-                mean_v_loss = (cum_v_loss/int(self.iters / 10)).numpy()
-                mean_q_loss = (cum_q_loss/int(self.iters / 10)).numpy()
+                mean_v_loss = (cum_v_loss/int(iters / 10)).numpy()
+                mean_q_loss = (cum_q_loss/int(iters / 10)).numpy()
                 print('batch: {}, v_loss: {}, q_loss: {}'.format(
                     batch + 1, mean_v_loss, mean_q_loss))
                 cum_v_loss.zero_()
