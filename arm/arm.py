@@ -176,7 +176,9 @@ class Arm(torch.nn.Module):
 
         print('training network...')
 
-        for batch in range(self.iters):
+        curriculum_percent = replay_buffer.curriculum_idcs.shape[0] / len(replay_buffer)
+
+        for batch in range(int(self.iters * curriculum_percent)):
 
             # sample mini batch
             mb_v, mb_v_tar, mb_q, mb_q_tar = self.__sample_mini_batch(
