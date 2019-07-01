@@ -117,12 +117,11 @@ class Arm(torch.nn.Module):
         mb_values = self.network(mb_obs)
         mb_v = mb_values[:, :1]
         mb_q = mb_values[:, 1:]
-        action_space = mb_q.shape[-1]
         mb_q = torch.gather(mb_q, dim=1, index=mb_actions)
         # add value estimate onto target values
         mb_v_tar = v_tar[mb_idcs].to(self.device) + val_est_mb
         mb_q_tar = q_tar[mb_idcs].to(self.device) + val_est_mb
-        return mb_v, mb_v_tar, mb_q, mb_q_tar, action_space
+        return mb_v, mb_v_tar, mb_q, mb_q_tar
 
     def __reset_v_tar(self):
         self.target_network.load_state_dict(self.network.state_dict())
@@ -134,16 +133,11 @@ class Arm(torch.nn.Module):
         for target, net in zip(target_params, params):
             target.data.add_(self.tau * (net.data - target.data))
 
-    def __update_network(self, mb_v, mb_v_tar, mb_q, mb_q_tar, action_space=1):
-        v_weight = 1 / (action_space + 1)
-        q_weight = action_space / (action_space + 1)
-
+    def __update_network(self, mb_v, mb_v_tar, mb_q, mb_q_tar):
         # compute loss and weight by action space
         self.network.optimizer.zero_grad()
         v_loss = self.network.criterion(mb_v, mb_v_tar)
-        v_loss *= v_weight
         q_loss = self.network.criterion(mb_q, mb_q_tar)
-        q_loss *= q_weight
         loss = v_loss + q_loss
         loss.backward()
         self.network.optimizer.step()
@@ -185,12 +179,12 @@ class Arm(torch.nn.Module):
         for batch in range(self.iters):
 
             # sample mini batch
-            mb_v, mb_v_tar, mb_q, mb_q_tar, action_space = self.__sample_mini_batch(
+            mb_v, mb_v_tar, mb_q, mb_q_tar = self.__sample_mini_batch(
                 replay_buffer, v_tar, q_tar)
 
             # update network
             v_loss, q_loss = self.__update_network(
-                mb_v, mb_v_tar, mb_q, mb_q_tar, action_space)
+                mb_v, mb_v_tar, mb_q, mb_q_tar)
 
             # update target network
             self.__update_v_target()
