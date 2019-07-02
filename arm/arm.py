@@ -38,6 +38,7 @@ class Arm(torch.nn.Module):
 
         self.epochs = 0
         self.steps = 0
+        self.board_iters = 0
 
     def __compute_targets(self, replay_buffer):
 
@@ -201,9 +202,10 @@ class Arm(torch.nn.Module):
                 # write loss to summary writer
                 with writer.as_default():
                     tf.summary.scalar(
-                        'v_loss', v_loss.item(), self.epochs * iters + batch)
+                        'v_loss', v_loss.item(), self.board_iters)
                     tf.summary.scalar(
-                        'q_loss', q_loss.item(), self.epochs * iters + batch)
+                        'q_loss', q_loss.item(), self.board_iters)
+                    self.board_iters += 1
 
             if (batch + 1) % int(iters / 10) == 0:
                 # print loss to console
