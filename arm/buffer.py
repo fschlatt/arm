@@ -166,6 +166,15 @@ class ReplayBuffer():
         return self
 
     def append(self, obs, next_obs, action, reward, done):
+        """Adds data to replay buffer
+        
+        Arguments:
+            obs {iterable} -- observations of state
+            next_obs {iterable} -- observations of next state
+            action {float} -- action of state
+            reward {float} -- reward obtained by action
+            done {bool} -- toggle if episode is done
+        """
         self.obs.append(np.array(obs, dtype=np.float32))
         self.next_obs.append(np.array(next_obs, dtype=np.float32))
         self.actions.append(np.array(action, dtype=np.int64))
