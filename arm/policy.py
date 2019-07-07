@@ -37,8 +37,10 @@ class Policy():
         Returns:
             int -- action
         """
+        self.network.eval()
         with torch.no_grad():
             values = self.network(obs)
+        self.network.train()
         expected_values = values[:, 0]
         cf_values = values[:, 1:]
         action_values = torch.clamp(cf_values - expected_values, min=0.0)
