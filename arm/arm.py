@@ -61,7 +61,6 @@ class Arm(torch.nn.Module):
                     b_evs = b_values[:, :1]
                     b_cfvs = b_values[:, 1:]
                 b_cfvs = torch.gather(b_cfvs, 1, actions)
-                b_evs, b_cfvs = b_evs.cpu(), b_cfvs.cpu()
                 evs = torch.cat((evs, b_evs.cpu()))
                 cfvs = torch.cat((cfvs, b_cfvs.cpu()))
             # compute advantage value and clip to 0
