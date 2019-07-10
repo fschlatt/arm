@@ -26,14 +26,14 @@ class Arm(torch.nn.Module):
         tau {float} -- target network update offset
     """
 
-    def __init__(self, network, iters, mini_batch_size, tau):
+    def __init__(self, network, iters, mini_batch_size, tau, linear=False):
         super(Arm, self).__init__()
-
         self.network = network
         self.target_network = copy.deepcopy(network)
         self.iters = iters
         self.mini_batch_size = mini_batch_size
         self.tau = tau
+        self.linear = linear
         self.device = network.device
 
         self.epochs = 0
@@ -41,9 +41,7 @@ class Arm(torch.nn.Module):
         self.board_iters = 0
 
     def __compute_targets(self, replay_buffer):
-
-        first_batch = self.epochs == 0
-        first_batch = False
+        first_batch = not self.epochs
 
         # precompute all v and q target values
         if first_batch:
@@ -64,20 +62,22 @@ class Arm(torch.nn.Module):
                 evs = torch.cat((evs, b_evs.cpu()))
                 cfvs = torch.cat((cfvs, b_cfvs.cpu()))
             # compute advantage value and clip to 0
-            q_plus = torch.clamp(cfvs - evs, min=0)
-
+            q_plus = cfvs - evs
+            if not self.linear:
+                q_plus = torch.clamp(q_plus, min=0)
         n_step = torch.from_numpy(
             replay_buffer.n_step[replay_buffer.curriculum_idcs]).unsqueeze(1)
 
         # set value target to n step rewards
         v_tar = n_step
         # add n step rewards on top of advantage values (cumulative advantage values)
-        q_tar = q_plus + n_step
-
+        weight = 1
+        if self.linear:
+            weight = self.epochs / (self.epochs + 1)
+        q_tar = q_plus * weight + n_step
         return v_tar, q_tar
 
     def __sample_mini_batch(self, replay_buffer, v_tar, q_tar):
-
         # sample random batch from replay buffer indices
         mb_idcs = np.random.choice(
             replay_buffer.curriculum_idcs.shape[0], self.mini_batch_size)
@@ -160,7 +160,6 @@ class Arm(torch.nn.Module):
                                                  summary writer
                                                  (default: {None})
         """
-
         self.steps += len(replay_buffer)
 
         # precompute all target values
@@ -176,7 +175,8 @@ class Arm(torch.nn.Module):
 
         print('training network...')
 
-        curriculum_percent = replay_buffer.curriculum_idcs.shape[0] / len(replay_buffer)
+        curriculum_percent = replay_buffer.curriculum_idcs.shape[0] / len(
+            replay_buffer)
 
         iters = int(self.iters * curriculum_percent)
 
