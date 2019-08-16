@@ -5,12 +5,6 @@ import copy
 import numpy as np
 import torch
 
-try:
-    import tensorflow as tf
-    TENSORFLOW = True
-except ImportError:
-    TENSORFLOW = False
-
 
 class Arm(torch.nn.Module):
     """Arm algorithm - initialized with arbitrary network
@@ -197,14 +191,13 @@ class Arm(torch.nn.Module):
             cum_v_loss += v_loss
             cum_q_loss += q_loss
 
-            if writer is not None and TENSORFLOW:
+            if writer is not None:
                 # write loss to summary writer
-                with writer.as_default():
-                    tf.summary.scalar(
-                        'v_loss', v_loss.item(), self.board_iters)
-                    tf.summary.scalar(
-                        'q_loss', q_loss.item(), self.board_iters)
-                    self.board_iters += 1
+                writer.add_scalar(
+                    'v_loss', v_loss.item(), self.board_iters)
+                writer.add_scalar(
+                    'q_loss', q_loss.item(), self.board_iters)
+                self.board_iters += 1
 
             if (batch + 1) % int(iters / 10) == 0:
                 # print loss to console
