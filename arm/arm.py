@@ -20,7 +20,7 @@ class Arm(torch.nn.Module):
         tau {float} -- target network update offset
     """
 
-    def __init__(self, network, iters, mini_batch_size, tau, q_plus_weight=False):
+    def __init__(self, network, iters, mini_batch_size, tau, q_plus_weight=1):
         super(Arm, self).__init__()
         self.network = network
         self.target_network = copy.deepcopy(network)
