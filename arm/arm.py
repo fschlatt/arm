@@ -201,4 +201,5 @@ class Arm(torch.nn.Module):
                 cum_v_loss.zero_()
                 cum_q_loss.zero_()
 
+        print()
         self.epochs += 1
