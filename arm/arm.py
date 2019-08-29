@@ -153,7 +153,6 @@ class Arm(torch.nn.Module):
         self.steps += len(replay_buffer)
 
         # precompute all target values
-        print('computing target values...')
         v_tar, q_tar = self.__compute_targets(replay_buffer)
 
         # initialize cumulative loss buffers
@@ -162,8 +161,6 @@ class Arm(torch.nn.Module):
 
         # reset value target network
         self.__reset_v_tar()
-
-        print('training network...')
 
         curriculum_percent = replay_buffer.curriculum_idcs.shape[0] / len(
             replay_buffer)
@@ -199,8 +196,8 @@ class Arm(torch.nn.Module):
                 # print loss to console
                 mean_v_loss = (cum_v_loss/int(iters / 10)).numpy()
                 mean_q_loss = (cum_q_loss/int(iters / 10)).numpy()
-                print('batch: {}, v_loss: {}, q_loss: {}'.format(
-                    batch + 1, mean_v_loss, mean_q_loss))
+                print('batch: {}, v_loss: {:.6f}, q_loss: {:.6f}'.format(
+                    batch + 1, mean_v_loss, mean_q_loss), end='\r')
                 cum_v_loss.zero_()
                 cum_q_loss.zero_()
 
