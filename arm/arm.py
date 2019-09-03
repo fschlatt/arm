@@ -31,6 +31,7 @@ class Arm(torch.nn.Module):
         self.device = network.device
 
         self.epochs = 0
+        self.batches = 0
         self.steps = 0
         self.board_iters = 0
 
@@ -200,6 +201,7 @@ class Arm(torch.nn.Module):
                     batch + 1, mean_v_loss, mean_q_loss), end='\r')
                 cum_v_loss.zero_()
                 cum_q_loss.zero_()
+            self.batches += 1
 
         print()
         self.epochs += 1
