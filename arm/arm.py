@@ -138,7 +138,7 @@ class Arm(torch.nn.Module):
 
         return v_loss, q_loss
 
-    def train_batch(self, replay_buffer, writer=None):
+    def train_batch(self, replay_buffer, truncate_curric=False, writer=None):
         """Trains the network with samples from the replay buffer
         using the arm algorithm. If a writer is passed, losses are
         recorded.
@@ -163,8 +163,10 @@ class Arm(torch.nn.Module):
         # reset value target network
         self.__reset_v_tar()
 
-        curriculum_percent = replay_buffer.curriculum_idcs.shape[0] / len(
-            replay_buffer)
+        curriculum_percent = 1
+        if truncate_curric:
+            curriculum_percent = replay_buffer.curriculum_idcs.shape[0] / len(
+                replay_buffer)
 
         iters = int(self.iters * curriculum_percent)
 
