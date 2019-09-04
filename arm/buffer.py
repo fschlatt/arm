@@ -121,10 +121,11 @@ class ReplayBuffer():
         # compute n step rewards
         n_step = np.array([np.sum(trajectory[step_idx:step_idx+self.n_step_size] *
                                   n_step_discount[:trajectory.shape[0]-step_idx])
-                           for trajectory in traj_rewards for step_idx in range(trajectory.shape[0])])
+                           for trajectory in traj_rewards for step_idx in range(len(trajectory))])
         # create array of ones for all trajectories, make last n_step_size entries 0
-        est_rew_weights = np.concatenate([np.concatenate((np.ones(
-            trajectory.shape[0] - self.n_step_size), np.zeros(self.n_step_size)))
+        est_rew_weights = np.concatenate([
+            np.concatenate((np.ones(trajectory.shape[0] - self.n_step_size),
+                            np.zeros(self.n_step_size)))
             for trajectory in traj_rewards])
         self.n_step = n_step.astype(np.float32)
         self.est_rew_weights = est_rew_weights.astype(np.float32)
@@ -167,7 +168,7 @@ class ReplayBuffer():
 
     def append(self, obs, next_obs, action, reward, done):
         """Adds data to replay buffer
-        
+
         Arguments:
             obs {iterable} -- observations of state
             next_obs {iterable} -- observations of next state
