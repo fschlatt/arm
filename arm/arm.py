@@ -145,7 +145,7 @@ class Arm(torch.nn.Module):
 
         Arguments:
             replay_buffer {ReplayBuffer} -- replay buffer of samples
-        
+
         Keyword Arguments:
             truncate_curric {bool} -- toggle to truncate number of
                                       iterations based on curriculum
