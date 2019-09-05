@@ -133,21 +133,15 @@ class ReplayBuffer():
     def __compute_curriculum(self, mode):
         if self.curriculum:
             if mode == 'done':
-                epi_start_idcs = np.insert(
-                    np.nonzero(self.vec_done)[0][:-1] + 1, 0, 0)
+                curric_start_idcs = np.nonzero(self.vec_done)[0]
             elif mode == 'reward':
-                epi_start_idcs = np.insert(np.nonzero(
-                    self.vec_rewards)[0][:-1] + 1, 0, 0)
+                curric_start_idcs = np.nonzero(self.vec_rewards)[0]
             curriculum_idcs = np.arange(*self.curriculum)
             bounded_length = curriculum_idcs.shape[0]
-            if curriculum_idcs[0] < 0:
-                epi_idcs = np.append(epi_start_idcs[1:], len(self))
-            else:
-                epi_idcs = epi_start_idcs
-            curriculum_idcs = np.tile(curriculum_idcs, epi_idcs.shape[0])
+            curriculum_idcs = np.tile(curriculum_idcs, curric_start_idcs.shape[0])
             curriculum_idcs = curriculum_idcs + \
-                np.repeat(epi_idcs, bounded_length)
-            curriculum_idcs = np.unique(curriculum_idcs)
+                np.repeat(curric_start_idcs, bounded_length)
+            curriculum_idcs = np.unique(np.clip(curriculum_idcs, 0, None))
             self.curriculum_idcs = self.idcs[curriculum_idcs]
         else:
             self.curriculum_idcs = self.idcs
