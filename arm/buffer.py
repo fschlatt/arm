@@ -19,8 +19,6 @@ class ReplayBuffer():
     """
 
     def __init__(self,
-                 curriculum=(),
-                 curriculum_mode='done',
                  frame_buffer=1,
                  n_step_size=1,
                  gamma=0.9):
@@ -40,18 +38,17 @@ class ReplayBuffer():
 
         self.idcs = np.array([])
         self.obs_idcs = np.array([])
-        self.curriculum_idcs = np.array([])
 
-        self.curriculum = curriculum
-        self.curriculum_mode = curriculum_mode
         self.frame_buffer = frame_buffer
         self.n_step_size = n_step_size
         self.gamma = gamma
 
     def __getitem__(self, idcs):
+        idcs = self.idcs[idcs]
         obs_idcs = self.obs_idcs[idcs]
+
         return (self.vec_obs[obs_idcs],
-                self.vec_next_obs[idcs],
+                self.vec_next_obs[obs_idcs],
                 self.vec_actions[idcs],
                 self.vec_rewards[idcs],
                 self.vec_done[idcs])
@@ -67,18 +64,16 @@ class ReplayBuffer():
         return self
 
     def __len__(self):
-        return len(self.rewards)
+        return len(self.idcs)
 
-    def __vec_idcs(self, mode):
+    def __obs_idcs(self):
         # init index array
-        self.idcs = np.arange(len(self))
-
         if self.frame_buffer > 1:
             # episode start indices
             epi_start_idcs = np.insert(np.nonzero(
                 self.vec_done)[0][:-1] + 1, 0, 0)
-            idcs = np.repeat(self.idcs, self.frame_buffer)
-            idcs = idcs.reshape(len(self), self.frame_buffer)
+            idcs = np.repeat(np.arange(len(self.rewards)), self.frame_buffer)
+            idcs = idcs.reshape(len(self.rewards), self.frame_buffer)
             # subtract frame buffer length
             idx_sub = np.arange(self.frame_buffer-1, -1, -1)
             idx_sub = np.tile(idx_sub, len(
@@ -106,9 +101,7 @@ class ReplayBuffer():
             idcs[insert_idcs] = insert
             self.obs_idcs = idcs
         else:
-            self.obs_idcs = self.idcs
-
-        self.__compute_curriculum(mode)
+            self.obs_idcs = np.arange(len(self.rewards))
 
     def __n_step_reward(self):
         # split trajactories
@@ -130,36 +123,6 @@ class ReplayBuffer():
         self.n_step = n_step.astype(np.float32)
         self.est_rew_weights = est_rew_weights.astype(np.float32)
 
-    def __compute_curriculum(self, mode):
-        if self.curriculum:
-            if mode == 'done':
-                curric_start_idcs = np.nonzero(self.vec_done)[0]
-            elif mode == 'reward':
-                curric_start_idcs = np.nonzero(self.vec_rewards)[0]
-            curriculum_idcs = np.arange(*self.curriculum)
-            bounded_length = curriculum_idcs.shape[0]
-            curriculum_idcs = np.tile(curriculum_idcs, curric_start_idcs.shape[0])
-            curriculum_idcs = curriculum_idcs + \
-                np.repeat(curric_start_idcs, bounded_length)
-            curriculum_idcs = np.unique(np.clip(curriculum_idcs, 0, None))
-            self.curriculum_idcs = self.idcs[curriculum_idcs]
-        else:
-            self.curriculum_idcs = self.idcs
-
-    def __vectorize(self):
-        if self.vec_obs.shape[0] != len(self):
-            self.vec_obs = np.stack(self.obs).astype(np.float32)
-        if self.vec_next_obs.shape[0] != len(self):
-            self.vec_next_obs = np.stack(self.next_obs).astype(np.float32)
-        if self.vec_actions.shape[0] != len(self):
-            self.vec_actions = np.stack(self.actions).astype(np.int64)
-        if self.vec_rewards.shape[0] != len(self):
-            self.vec_rewards = np.stack(self.rewards).astype(np.float32)
-        if self.vec_done.shape[0] != len(self):
-            self.vec_done = np.stack(self.done).astype(np.int64)
-
-        return self
-
     def append(self, obs, next_obs, action, reward, done):
         """Adds data to replay buffer
 
@@ -176,45 +139,65 @@ class ReplayBuffer():
         self.rewards.append(np.array(reward, dtype=np.float32))
         self.done.append(np.array(done, dtype=np.int64))
 
-    def iterate(self, batch_size=1, random=False, curriculum=False):
+    def curriculum(self, curric_range, mode):
+        if mode == 'done':
+            curric_vec = self.vec_done
+        elif mode == 'reward':
+            curric_vec = self.vec_rewards
+        elif mode == 'start':
+            curric_vec = np.array([0] + self.vec_done[:-1].tolist())
+        else:
+            raise ValueError(
+                'unknown curriculum mode {}, choose one of [start, done, reward]'.format(mode))
+        curriculum_idcs = []
+        epi_done_idcs = np.nonzero(self.done)[0] + 1
+        epi_length = epi_done_idcs.copy()
+        epi_length[1:] -= epi_done_idcs[:-1]
+        cumulative_length = 0
+        curric_idcs = np.arange(*curric_range)
+        curric_length = curric_idcs.shape[0]
+
+        for length, vec in zip(epi_length, np.split(curric_vec, epi_done_idcs)[:-1]):
+            curric_start_idcs = np.nonzero(vec)[0]
+
+            epi_curric_idcs = np.tile(curric_idcs, curric_start_idcs.shape[0])
+            epi_curric_idcs = epi_curric_idcs + \
+                np.repeat(curric_start_idcs, curric_length)
+            epi_curric_idcs = np.unique(np.clip(epi_curric_idcs, 0, length - 1)) + cumulative_length
+            curriculum_idcs += [*epi_curric_idcs]
+
+            cumulative_length += length
+        
+        self.idcs = np.stack(curriculum_idcs)
+        return self
+
+    def iterate(self, batch_size=1, random=False):
         """Generator to iterate over replay buffer
 
         Keyword Arguments:
             batch_size {int} -- number of samples per batch (default: {0})
             random {bool} -- return random samples (default: {False})
-            curriculum {bool} -- only use samples from curriculum (default: {False})
         """
         batch_iters = 0
         shown_data = 0
-        if curriculum:
-            iter_idcs = self.curriculum_idcs
-        else:
-            iter_idcs = self.idcs
 
-        while shown_data < iter_idcs.shape[0]:
+        while shown_data < len(self):
             batch_iters += 1
             if random:
-                idcs = np.random.choice(iter_idcs.shape[0], batch_size)
+                idcs = np.random.choice(len(self), batch_size)
             else:
-                end_idx = min(shown_data + batch_size, iter_idcs.shape[0])
+                end_idx = min(shown_data + batch_size, len(self))
                 idcs = np.arange(shown_data, end_idx)
-                idcs = iter_idcs[idcs]
             shown_data = batch_iters * batch_size
             yield self[idcs]
 
     def vectorize(self,
-                  curriculum=(),
-                  curriculum_mode='done',
                   frame_buffer=0,
                   n_step_size=0,
                   gamma=0):
         """Vectorizes buffer for training
 
         Keyword Arguments:
-            curriculum {tuple} -- range of indices to train on (default: {()})
-            curriculum_mode {str} -- either 'done' or 'reward', curriculum
-                                     learning based on episodes or rewards
-                                     (default: {'done'})
             frame_buffer {int} -- number of frames per observation (default: {1})
             n_step_size {int} -- number of steps to accumulate rewards (default: {1})
             gamma {float} -- discount factor per reward step (default: {0.9})
@@ -222,26 +205,18 @@ class ReplayBuffer():
         Returns:
             ReplayBuffer -- vectorized buffer (no copy)
         """
-        self.__vectorize()
-        idcs = False or len(self) != self.idcs.shape[0]
-        if frame_buffer and frame_buffer != self.frame_buffer:
+        if frame_buffer:
             self.frame_buffer = frame_buffer
-            idcs = True
-        if curriculum and curriculum != self.curriculum:
-            self.curriculum = curriculum
-            idcs = True
-        if curriculum_mode and curriculum_mode != self.curriculum_mode:
-            self.curriculum_mode = curriculum_mode
-            idcs = True
-        if idcs:
-            self.__vec_idcs(curriculum_mode)
-        n_step_reward = False or len(self) != self.n_step.shape[0]
-        if n_step_size and n_step_size != self.n_step_size:
+        if n_step_size:
             self.n_step_size = n_step_size
-            n_step_reward = True
-        if gamma and gamma != self.gamma:
+        if gamma:
             self.gamma = gamma
-            n_step_reward = True
-        if n_step_reward:
-            self.__n_step_reward()
+        self.idcs = np.arange(len(self.rewards))
+        self.vec_obs = np.stack(self.obs).astype(np.float32)
+        self.vec_next_obs = np.stack(self.next_obs).astype(np.float32)
+        self.vec_actions = np.stack(self.actions).astype(np.int64)
+        self.vec_rewards = np.stack(self.rewards).astype(np.float32)
+        self.vec_done = np.stack(self.done).astype(np.int64)
+        self.__obs_idcs()
+        self.__n_step_reward()
         return self

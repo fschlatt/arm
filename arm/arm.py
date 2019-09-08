@@ -39,12 +39,12 @@ class Arm(torch.nn.Module):
 
         # precompute all v and q target values
         if first_batch:
-            q_plus = torch.zeros([replay_buffer.curriculum_idcs.shape[0], 1])
+            q_plus = torch.zeros([len(replay_buffer), 1])
         else:
             evs = torch.tensor([])
             cfvs = torch.tensor([])
             # compute q and v values of last iteration
-            for obs, _, actions, *_ in replay_buffer.iterate(batch_size=512, curriculum=True):
+            for obs, _, actions, *_ in replay_buffer.iterate(batch_size=512):
                 obs = torch.from_numpy(obs).to(self.device)
                 actions = torch.from_numpy(
                     actions).unsqueeze(1).to(self.device)
@@ -59,7 +59,7 @@ class Arm(torch.nn.Module):
             q_plus = cfvs - evs
             q_plus = torch.clamp(q_plus, min=0)
         n_step = torch.from_numpy(
-            replay_buffer.n_step[replay_buffer.curriculum_idcs]).unsqueeze(1)
+            replay_buffer.n_step[replay_buffer.idcs]).unsqueeze(1)
 
         # set value target to n step rewards
         v_tar = n_step
@@ -69,10 +69,8 @@ class Arm(torch.nn.Module):
 
     def __sample_mini_batch(self, replay_buffer, v_tar, q_tar):
         # sample random batch from replay buffer indices
-        mb_idcs = np.random.choice(
-            replay_buffer.curriculum_idcs.shape[0], self.mini_batch_size)
-        mb_obs, _, mb_actions, * \
-            _ = replay_buffer[replay_buffer.curriculum_idcs[mb_idcs]]
+        mb_idcs = np.random.choice(len(replay_buffer), self.mini_batch_size)
+        mb_obs, _, mb_actions, *_ = replay_buffer[mb_idcs]
 
         # initialize value estimate
         val_est_mb = torch.zeros(
@@ -80,15 +78,13 @@ class Arm(torch.nn.Module):
 
         # compute value estimate for non terminal nodes
         mb_est_rew_w = torch.from_numpy(
-            replay_buffer.est_rew_weights[replay_buffer.curriculum_idcs[mb_idcs]])
+            replay_buffer.est_rew_weights[replay_buffer.idcs[mb_idcs]])
         mb_est_non_zero = mb_est_rew_w.nonzero().squeeze()
         if mb_est_non_zero.numel():
-            mb_est_rew_idcs = (replay_buffer.curriculum_idcs[mb_idcs][mb_est_non_zero] +
+            mb_est_rew_idcs = (replay_buffer.idcs[mb_idcs][mb_est_non_zero] +
                                replay_buffer.n_step_size).reshape(-1)
-            mb_v_prime_obs, _, mb_v_prime_actions, * \
-                _ = replay_buffer[mb_est_rew_idcs]
-            mb_v_prime_obs = mb_v_prime_obs
-            mb_v_prime_actions = mb_v_prime_actions.astype(np.int64)
+            mb_v_prime_obs = replay_buffer.vec_obs[mb_est_rew_idcs]
+            mb_v_prime_actions = replay_buffer.vec_actions[mb_est_rew_idcs].astype(np.int64)
             mb_v_prime_obs = torch.from_numpy(
                 mb_v_prime_obs).to(self.device)
             mb_v_prime_actions = torch.from_numpy(
