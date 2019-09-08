@@ -140,6 +140,20 @@ class ReplayBuffer():
         self.done.append(np.array(done, dtype=np.int64))
 
     def curriculum(self, curric_range, mode):
+        """Sets curriculum for the replay buffer
+
+        Arguments:
+            curric_range {tuple} -- tuple describing range of curriculum, i.e.
+                                    (-5, 1) -> [-5, -4, -3, -2, -1, 0]
+            mode {str} -- one of either [start, done, reward], to set curriculum
+                          start indices
+
+        Raises:
+            ValueError: raised if passed mode is unkown
+
+        Returns:
+            ReplayBuffer -- returns self
+        """
         if mode == 'done':
             curric_vec = self.vec_done
         elif mode == 'reward':
@@ -163,11 +177,12 @@ class ReplayBuffer():
             epi_curric_idcs = np.tile(curric_idcs, curric_start_idcs.shape[0])
             epi_curric_idcs = epi_curric_idcs + \
                 np.repeat(curric_start_idcs, curric_length)
-            epi_curric_idcs = np.unique(np.clip(epi_curric_idcs, 0, length - 1)) + cumulative_length
+            epi_curric_idcs = np.unique(
+                np.clip(epi_curric_idcs, 0, length - 1)) + cumulative_length
             curriculum_idcs += [*epi_curric_idcs]
 
             cumulative_length += length
-        
+
         self.idcs = np.stack(curriculum_idcs)
         return self
 
