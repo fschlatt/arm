@@ -163,8 +163,8 @@ class Arm(torch.nn.Module):
 
         curriculum_percent = 1
         if truncate_curric:
-            curriculum_percent = replay_buffer.curriculum_idcs.shape[0] / len(
-                replay_buffer)
+            curriculum_percent = len(replay_buffer) / len(
+                replay_buffer.rewards)
 
         iters = int(self.iters * curriculum_percent)
 
