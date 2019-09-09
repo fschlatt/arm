@@ -117,8 +117,8 @@ class ReplayBuffer():
                            for trajectory in traj_rewards for step_idx in range(len(trajectory))])
         # create array of ones for all trajectories, make last n_step_size entries 0
         est_rew_weights = np.concatenate([
-            np.concatenate((np.ones(trajectory.shape[0] - self.n_step_size),
-                            np.zeros(self.n_step_size)))
+            np.concatenate((max(0, np.ones(trajectory.shape[0] - self.n_step_size)),
+                            np.zeros(min(self.n_step_size, trajectory.shape[0]))))
             for trajectory in traj_rewards])
         self.n_step = n_step.astype(np.float32)
         self.est_rew_weights = est_rew_weights.astype(np.float32)
