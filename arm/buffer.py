@@ -154,6 +154,9 @@ class ReplayBuffer():
         Returns:
             ReplayBuffer -- returns self
         """
+        if not curric_range:
+            self.idcs = np.arange(len(self.rewards))
+            return self
         if mode == 'done':
             curric_vec = self.vec_done
         elif mode == 'reward':
