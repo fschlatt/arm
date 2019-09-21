@@ -18,9 +18,7 @@ for n epochs:
     arm.train_batch(replay_buffer)
 ```
 
-If you would like to use curriculum learning, pass curriculum bounds via the `vectorize()` function of the replay buffer. E.g. to train on only the last 20 steps of an episode, pass curriculum bounds of `rep_buffer.vectorize(curriculum=(-20, 0), curriculum_mode='done')` or on the last 20 steps before a reward `rep_buffer.vectorize(curriculum=(-20, 0), curriculum_mode='reward')`. 
-
-To record the training results and losses in a tensorboard, use at least tensorflow 2.0. Install using `pip install -q tf-nightly-2.0-preview`.
+If you would like to use curriculum learning, pass curriculum bounds via the `curriculum()` function of the replay buffer. E.g. to train on only the last 20 steps of an episode, pass curriculum bounds of `rep_buffer.curriculum((-20, 1), 'done')` or on the last 20 steps before a reward `rep_buffer.curriculum((-20, 1), 'reward')`. 
 
 To save the entire ARM network and be able to resume training, use `torch.save(arm, '{arm save path}')`. If only the network parameters are needed use `torch.save(arm.network.state_dict(), '{network save path}')`.
 
