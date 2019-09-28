@@ -84,7 +84,8 @@ class Arm(torch.nn.Module):
             mb_est_rew_idcs = (replay_buffer.idcs[mb_idcs][mb_est_non_zero] +
                                replay_buffer.n_step_size).reshape(-1)
             mb_v_prime_obs = replay_buffer.vec_obs[mb_est_rew_idcs]
-            mb_v_prime_actions = replay_buffer.vec_actions[mb_est_rew_idcs].astype(np.int64)
+            mb_v_prime_actions = replay_buffer.vec_actions[mb_est_rew_idcs].astype(
+                np.int64)
             mb_v_prime_obs = torch.from_numpy(
                 mb_v_prime_obs).to(self.device)
             mb_v_prime_actions = torch.from_numpy(
@@ -133,7 +134,9 @@ class Arm(torch.nn.Module):
 
         return v_loss, q_loss
 
-    def train_batch(self, replay_buffer, truncate_curric=False, writer=None):
+    def train_batch(
+            self, replay_buffer, truncate_curric=False,
+            reward_weight=1, writer=None):
         """Trains the network with samples from the replay buffer
         using the arm algorithm. If a writer is passed, losses are
         recorded.
@@ -145,11 +148,17 @@ class Arm(torch.nn.Module):
             truncate_curric {bool} -- toggle to truncate number of
                                       iterations based on curriculum
                                       to replay buffer ratio (default: {False})
+            reward_weight {float} -- weight applied to all rewards in replay
+                                     buffer to prevent q_plus explosion
+                                     (default: {1})
             writer {tf.summary.SummaryWriter} -- optional tensorflow
                                                  summary writer
                                                  (default: {None})
         """
         self.steps += len(replay_buffer)
+
+        # weight rewards
+        replay_buffer.vec_rewards = replay_buffer.vec_rewards * reward_weight
 
         # precompute all target values
         v_tar, q_tar = self.__compute_targets(replay_buffer)
