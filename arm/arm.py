@@ -20,7 +20,9 @@ class Arm(torch.nn.Module):
         tau {float} -- target network update offset
     """
 
-    def __init__(self, network, iters, mini_batch_size, tau, q_plus_weight=1):
+    def __init__(
+            self, network, iters, mini_batch_size,
+            tau, q_plus_weight=1, grad_clip=None):
         super(Arm, self).__init__()
         self.network = network
         self.target_network = copy.deepcopy(network)
@@ -28,6 +30,7 @@ class Arm(torch.nn.Module):
         self.mini_batch_size = mini_batch_size
         self.tau = tau
         self.q_plus_weight = q_plus_weight
+        self.grad_clip = grad_clip
         self.device = network.device
 
         self.epochs = 0
@@ -127,6 +130,9 @@ class Arm(torch.nn.Module):
         q_loss = self.network.criterion(mb_q, mb_q_tar)
         loss = v_loss + q_loss
         loss.backward()
+        if self.grad_clip is not None:
+            torch.nn.utils.clip_grad_norm_(
+                self.network.parameters(), self.grad_clip)
         self.network.optimizer.step()
 
         v_loss = v_loss.detach().cpu()
