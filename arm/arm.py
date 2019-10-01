@@ -22,7 +22,8 @@ class Arm(torch.nn.Module):
 
     def __init__(
             self, network, iters, mini_batch_size,
-            tau, q_plus_weight=1, grad_clip=None):
+            tau, q_plus_weight=1, grad_clip=None,
+            clip_value=True):
         super(Arm, self).__init__()
         self.network = network
         self.target_network = copy.deepcopy(network)
@@ -31,6 +32,7 @@ class Arm(torch.nn.Module):
         self.tau = tau
         self.q_plus_weight = q_plus_weight
         self.grad_clip = grad_clip
+        self.clip_value = clip_value
         self.device = network.device
 
         self.epochs = 0
@@ -60,7 +62,8 @@ class Arm(torch.nn.Module):
                 cfvs = torch.cat((cfvs, b_cfvs.cpu()))
             # compute advantage value and clip to 0
             q_plus = cfvs - evs
-            q_plus = torch.clamp(q_plus, min=0)
+            if self.clip_value:
+                q_plus = torch.clamp(q_plus, min=0)
         n_step = torch.from_numpy(
             replay_buffer.n_step[replay_buffer.idcs]).unsqueeze(1)
 
