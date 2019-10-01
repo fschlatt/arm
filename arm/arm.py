@@ -18,12 +18,25 @@ class Arm(torch.nn.Module):
         iters {int} -- number of training iterations per batch
         mini_batch_size {int} -- number of samples per iteration
         tau {float} -- target network update offset
+
+    Keyword Arguments:
+        q_plus_weight {float} -- weight applied to advantage value 
+                                 before updating network
+                                 (default: {1})
+        grad_clip {float} -- value to clip gradient norm to, if None no
+                             gradient clipping is applied
+                             (default: {None})
+        clip_value {bool} -- toggle to clip advantage values to positive
+                             values (default: {True})
+        reward_weight {float} -- weight applied to all rewards in replay
+                                 buffer to prevent q_plus explosion
+                                 (default: {1})
     """
 
     def __init__(
             self, network, iters, mini_batch_size,
             tau, q_plus_weight=1, grad_clip=None,
-            clip_value=True):
+            clip_value=True, reward_weight=1):
         super(Arm, self).__init__()
         self.network = network
         self.target_network = copy.deepcopy(network)
@@ -33,6 +46,7 @@ class Arm(torch.nn.Module):
         self.q_plus_weight = q_plus_weight
         self.grad_clip = grad_clip
         self.clip_value = clip_value
+        self.reward_weight = reward_weight
         self.device = network.device
 
         self.epochs = 0
@@ -144,8 +158,7 @@ class Arm(torch.nn.Module):
         return v_loss, q_loss
 
     def train_batch(
-            self, replay_buffer, truncate_curric=False,
-            reward_weight=1, writer=None):
+            self, replay_buffer, truncate_curric=False, writer=None):
         """Trains the network with samples from the replay buffer
         using the arm algorithm. If a writer is passed, losses are
         recorded.
@@ -157,9 +170,6 @@ class Arm(torch.nn.Module):
             truncate_curric {bool} -- toggle to truncate number of
                                       iterations based on curriculum
                                       to replay buffer ratio (default: {False})
-            reward_weight {float} -- weight applied to all rewards in replay
-                                     buffer to prevent q_plus explosion
-                                     (default: {1})
             writer {tf.summary.SummaryWriter} -- optional tensorflow
                                                  summary writer
                                                  (default: {None})
@@ -167,7 +177,8 @@ class Arm(torch.nn.Module):
         self.steps += len(replay_buffer)
 
         # weight rewards
-        replay_buffer.vec_rewards = replay_buffer.vec_rewards * reward_weight
+        replay_buffer.n_step = (replay_buffer.n_step
+                                * self.reward_weight)
 
         # precompute all target values
         v_tar, q_tar = self.__compute_targets(replay_buffer)
