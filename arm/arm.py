@@ -170,7 +170,7 @@ class Arm(torch.nn.Module):
         Keyword Arguments:
             truncate_curric {bool} -- toggle to truncate number of
                                       iterations based on curriculum
-                                      to replay buffer ratio 
+                                      to replay buffer ratio
                                       (default: {False})
             writer {tf.summary.SummaryWriter} -- optional tensorflow
                                                  summary writer
