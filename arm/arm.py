@@ -10,7 +10,7 @@ class Arm(torch.nn.Module):
     """Arm algorithm - initialized with arbitrary network
     that maps observations to vector of size one greater than
     the size of the action space. Can be trained by passing
-    a replay buffer to the `train_batch` function
+    a replay buffer to the `train` function
     function.
 
     Arguments:
@@ -172,9 +172,9 @@ class Arm(torch.nn.Module):
                                       iterations based on curriculum
                                       to replay buffer ratio
                                       (default: {False})
-            writer {tf.summary.SummaryWriter} -- optional tensorflow
-                                                 summary writer
-                                                 (default: {None})
+            writer {SummaryWriter} -- optional tensorflow
+                                      summary writer
+                                      (default: {None})
         """
         self.steps += len(replay_buffer)
 
