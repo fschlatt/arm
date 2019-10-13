@@ -20,7 +20,7 @@ class Arm(torch.nn.Module):
         tau {float} -- target network update offset
 
     Keyword Arguments:
-        q_plus_weight {float} -- weight applied to advantage value 
+        q_plus_weight {float} -- weight applied to advantage value
                                  before updating network
                                  (default: {1})
         grad_clip {float} -- value to clip gradient norm to, if None no
@@ -170,7 +170,8 @@ class Arm(torch.nn.Module):
         Keyword Arguments:
             truncate_curric {bool} -- toggle to truncate number of
                                       iterations based on curriculum
-                                      to replay buffer ratio (default: {False})
+                                      to replay buffer ratio 
+                                      (default: {False})
             writer {tf.summary.SummaryWriter} -- optional tensorflow
                                                  summary writer
                                                  (default: {None})
