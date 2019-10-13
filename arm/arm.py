@@ -83,7 +83,8 @@ class Arm(torch.nn.Module):
 
         # set value target to n step rewards
         v_tar = n_step
-        # add n step rewards on top of advantage values (cumulative advantage values)
+        # add n step rewards on top of advantage values
+        # (cumulative advantage values)
         q_tar = q_plus * self.q_plus_weight + n_step
         return v_tar, q_tar
 
@@ -104,8 +105,8 @@ class Arm(torch.nn.Module):
             mb_est_rew_idcs = (replay_buffer.idcs[mb_idcs][mb_est_non_zero] +
                                replay_buffer.n_step_size).reshape(-1)
             mb_v_prime_obs = replay_buffer.vec_obs[mb_est_rew_idcs]
-            mb_v_prime_actions = replay_buffer.vec_actions[mb_est_rew_idcs].astype(
-                np.int64)
+            mb_v_prime_actions = replay_buffer.vec_actions[
+                mb_est_rew_idcs].astype(np.int64)
             mb_v_prime_obs = torch.from_numpy(
                 mb_v_prime_obs).to(self.device)
             mb_v_prime_actions = torch.from_numpy(
@@ -157,7 +158,7 @@ class Arm(torch.nn.Module):
 
         return v_loss, q_loss
 
-    def train_batch(
+    def train(
             self, replay_buffer, truncate_curric=False, writer=None):
         """Trains the network with samples from the replay buffer
         using the arm algorithm. If a writer is passed, losses are
