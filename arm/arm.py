@@ -31,12 +31,14 @@ class Arm(torch.nn.Module):
         reward_weight {float} -- weight applied to all rewards in replay
                                  buffer to prevent q_plus explosion
                                  (default: {1})
+        verbose {bool} -- toggle to print training loss 
+                          (default: {True})
     """
 
     def __init__(
             self, network, iters, mini_batch_size,
             tau, q_plus_weight=1, grad_clip=None,
-            clip_value=True, reward_weight=1):
+            clip_value=True, reward_weight=1, verbose=True):
         super(Arm, self).__init__()
         self.network = network
         self.target_network = copy.deepcopy(network)
@@ -48,6 +50,7 @@ class Arm(torch.nn.Module):
         self.clip_value = clip_value
         self.reward_weight = reward_weight
         self.device = network.device
+        self.verbose = verbose
 
         self.epochs = 0
         self.batches = 0
@@ -142,7 +145,7 @@ class Arm(torch.nn.Module):
             target.data.add_(self.tau * (net.data - target.data))
 
     def __update_network(self, mb_v, mb_v_tar, mb_q, mb_q_tar):
-        # compute loss and weight by action space
+        # compute loss
         self.network.optimizer.zero_grad()
         v_loss = self.network.criterion(mb_v, mb_v_tar)
         q_loss = self.network.criterion(mb_q, mb_q_tar)
@@ -153,8 +156,8 @@ class Arm(torch.nn.Module):
                 self.network.parameters(), self.grad_clip)
         self.network.optimizer.step()
 
-        v_loss = v_loss.detach().cpu()
-        q_loss = q_loss.detach().cpu()
+        v_loss = v_loss.detach().cpu().item()
+        q_loss = q_loss.detach().cpu().item()
 
         return v_loss, q_loss
 
@@ -186,8 +189,8 @@ class Arm(torch.nn.Module):
         v_tar, q_tar = self.__compute_targets(replay_buffer)
 
         # initialize cumulative loss buffers
-        cum_v_loss = torch.tensor(0.0)
-        cum_q_loss = torch.tensor(0.0)
+        cum_v_loss = 0
+        cum_q_loss = 0
 
         # reset value target network
         self.__reset_v_tar()
@@ -223,7 +226,7 @@ class Arm(torch.nn.Module):
                 writer.add_scalar(
                     'q_loss', q_loss.item(), self.batches)
 
-            if (batch + 1) % int(iters / 10) == 0:
+            if (batch + 1) % int(iters / 10) == 0 and self.verbose:
                 # print loss to console
                 mean_v_loss = (cum_v_loss/int(iters / 10)).numpy()
                 mean_q_loss = (cum_q_loss/int(iters / 10)).numpy()
@@ -233,5 +236,6 @@ class Arm(torch.nn.Module):
                 cum_q_loss.zero_()
             self.batches += 1
 
-        print()
+        if self.verbose:
+            print()
         self.epochs += 1
