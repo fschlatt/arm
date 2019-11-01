@@ -1,9 +1,10 @@
 """Replay buffer used to record environment state and agent behavior
 """
 import numpy as np
+import torch
 
 
-class ReplayBuffer():
+class ReplayBuffer(torch.utils.data.Dataset):
     """Replay buffer used to record observations, next observations, actions,
     rewards and if a node is terminal. Can be passed to the
     arm algorithm for training.
