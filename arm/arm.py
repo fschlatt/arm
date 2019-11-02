@@ -222,18 +222,18 @@ class Arm(torch.nn.Module):
             if writer is not None:
                 # write loss to summary writer
                 writer.add_scalar(
-                    'v_loss', v_loss.item(), self.batches)
+                    'v_loss', v_loss, self.batches)
                 writer.add_scalar(
-                    'q_loss', q_loss.item(), self.batches)
+                    'q_loss', q_loss, self.batches)
 
             if (batch + 1) % int(iters / 10) == 0 and self.verbose:
                 # print loss to console
-                mean_v_loss = (cum_v_loss/int(iters / 10)).numpy()
-                mean_q_loss = (cum_q_loss/int(iters / 10)).numpy()
+                mean_v_loss = (cum_v_loss/int(iters / 10))
+                mean_q_loss = (cum_q_loss/int(iters / 10))
                 print('batch: {}, v_loss: {:.6f}, q_loss: {:.6f}'.format(
                     batch + 1, mean_v_loss, mean_q_loss), end='\r')
-                cum_v_loss.zero_()
-                cum_q_loss.zero_()
+                cum_v_loss = 0
+                cum_q_loss = 0
             self.batches += 1
 
         if self.verbose:
