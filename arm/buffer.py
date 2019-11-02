@@ -2,7 +2,7 @@
 """
 import numpy as np
 import torch
-
+import torch.utils.data
 
 class ReplayBuffer(torch.utils.data.Dataset):
     """Replay buffer used to record observations, next observations, actions,
